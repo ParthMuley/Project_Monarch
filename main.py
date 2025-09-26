@@ -17,3 +17,6 @@ for i, task in enumerate(tasks, 1):
         print("\n--- Monarch's Report ---")
         print(result)
         print("------------------------")
+
+# --- ADD THIS LINE AT THE VERY END ---
+monarch_controller.save_army()

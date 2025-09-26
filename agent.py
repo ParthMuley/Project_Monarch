@@ -62,3 +62,14 @@ class ShadowAgent:
             next_rank=RANKS[current_rank_index+1]
             self.rank=next_rank
             print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
+
+    def to_dict(self):
+        """
+        Converts the agent's data to a dictionary for saving.
+        """
+        return {
+            "agent_id": self.agent_id,
+            "rank": self.rank,
+            "specialty": self.specialty,
+            "xp": self.xp
+        }

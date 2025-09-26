@@ -1,13 +1,49 @@
 # monarch.py
+import json
+from logging import exception
+
 from agent import ShadowAgent
 
 
 class Monarch:
-    def __init__(self):
+    def __init__(self, army_file="army.json"):
         self.army = {}
-        print("Monarch System Initialized. Managing a persistent army.")
+        self.army_file = army_file
+        self.load_army()
+        print(f"Monarch System Initialized. Managing {len(self.army)} army.")
 
-    def _determine_specialty(self, user_prompt):
+    def save_army(self):
+        """
+        Saves the current state of the army to the JSON file.
+        """
+        print(f"Monarch : Saving the state of {len(self.army)} agents to {self.army_file}.")
+        army_data={agent_id:agent.to_dict() for agent_id, agent in self.army.items()}
+        with open(self.army_file, "w") as f:
+            json.dump(army_data, f, indent=4)
+        print("Save Complete.")
+
+    def load_army(self):
+        """
+        Loads the army srate from the JSON file if it exists.
+        """
+        try:
+            with open(self.army_file, "r") as f:
+                army_data = json.load(f)
+                for agent_id, agent_info in army_data.items():
+                    agent = ShadowAgent(
+                        agent_id=agent_info["agent_id"],
+                        rank=agent_info['rank'],
+                        specialty=agent_info['specialty']
+                    )
+                    agent.xp = agent_info['xp']
+                    self.army[agent_id] = agent
+            print(f"Successfully Loaded {len(self.army)} agents from {self.army_file}.")
+        except FileNotFoundError:
+            print("No existing army file found. Starting with a new army.")
+        except Exception as e:
+            print(f"Could not load army file. Starting fresh. Error: {e}")
+
+    def determine_specialty(self, user_prompt):
         """Helper function to decide the specialty."""
         prompt = user_prompt.lower()
         if "summarize" in prompt or "write" in prompt or "describe" in prompt:
@@ -16,7 +52,7 @@ class Monarch:
             return "Developer"
         return "Generalist"
 
-    def _find_available_agent(self, specialty):
+    def find_available_agent(self, specialty):
         """Finds an existing agent of a specific specialty."""
         for agent in self.army.values():
             if agent.specialty == specialty:
@@ -24,11 +60,8 @@ class Monarch:
         return None
 
     def assign_task(self, user_prompt):
-        specialty = self._determine_specialty(user_prompt)
-
-        # --- THIS IS THE NEW LOGIC ---
-        agent_to_assign = self._find_available_agent(specialty)
-
+        specialty = self.determine_specialty(user_prompt)
+        agent_to_assign = self.find_available_agent(specialty)
         if not agent_to_assign:
             # If no agent is found, summon a new one and add it to the army
             agent_id = f"{specialty[0]}-{len(self.army) + 1:03d}"
