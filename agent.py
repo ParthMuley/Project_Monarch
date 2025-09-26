@@ -1,8 +1,8 @@
 import os
-from dotenv import load_dotenv
 from openai import OpenAI
+from dotenv import load_dotenv
+load_dotenv(override=True)
 
-load_dotenv()
 client=OpenAI()
 
 # --- NEW: Define Rank-based configurations ---
@@ -15,6 +15,37 @@ AGENT_CONFIGS = {
     "A": {"model": "gpt-4o", "system_prompt": "You are a leading expert. Your answers are authoritative, nuanced, and anticipate user needs."},
     "S": {"model": "gpt-4o", "system_prompt": "You are a master of your craft. Your answers are groundbreaking, clear, and set the standard for excellence."}
 }
+
+CODER_PROMPTS = {
+    "Junior Dev": "You are a Junior Developer. Write Clean, Simple and functional code. Add comments to explain your logic. ",
+    "Software Engineer":"You are a Software Engineer. Write efficient, well-structured and production-ready code. Follow best practices and include docstring.",
+    "System Architect": "You are a System Architect. Design robust, scalable, and high level system architecture. Think about components, data flow and trade-offs. "
+}
+
+
+PLANNER_PROMPT = """
+You are a master project planner AI. Your sole purpose is to decompose a user's request into a structured, multi-step plan.
+You MUST adhere to the following strict rules:
+1. Your entire response MUST be a valid JSON object and nothing else.
+2. The JSON object must be a list of dictionaries.
+3. Each dictionary represents a sub-task and must contain a "guild" ('Coder' or 'Writer') and a "prompt".
+4. If a task depends on a previous task's output, use a placeholder like {CODE} or {REPORT} in the prompt.
+5. DO NOT include any introductory text, explanations, or conversational filler like "Sure, here is the plan:".
+6. DO NOT wrap the JSON in markdown code blocks like ```json ... ```.
+
+Example Request: "Create a webpage that explains bubble sort and show the code for it."
+Example JSON Output:
+[
+    {
+        "guild": "Coder",
+        "prompt": "Write a Python function that implements the bubble sort algorithm."
+    },
+    {
+        "guild": "Writer",
+        "prompt": "Write the text for a webpage that explains the bubble sort algorithm. Use the following code as a reference: {CODE}"
+    }
+]
+"""
 
 RANK_XP_THRESHOLDS={
     "F":50, "E":150, "D":300, "C":600,
@@ -36,12 +67,17 @@ class ShadowAgent:
 
     def update_config(self):
         """
-        Sets the agent's model and prompt based on its content rank.
+        Sets the agent's model and prompt based on its content rank and speciality.
         """
         config = AGENT_CONFIGS.get(self.rank, AGENT_CONFIGS["F"])
         self.model = config["model"]
-        base_prompt = config["system_prompt"]
-        self.system_prompt = f"{base_prompt} Your specialty: {self.specialty}."
+        base_prompt = CODER_PROMPTS.get(self.specialty,config["system_prompt"])
+        self.system_prompt = f"{base_prompt} Your primary specialty is: {self.specialty}."
+
+        if self.specialty == "Planner":
+            base_prompt=PLANNER_PROMPT
+
+        self.system_prompt=f"{base_prompt} Your primary specialty is: {self.specialty}."
 
 
     def perform_task(self, prompt):
@@ -75,17 +111,43 @@ class ShadowAgent:
 
     def check_for_rank_up(self):
         """ Checks if the agent has enough XP to advance to the next rank."""
-        if self.rank=="S":
-            return
-        current_rank_index=RANKS.index(self.rank)
-        xp_needed=RANK_XP_THRESHOLDS[self.rank]
+        if self.rank == "S": return
 
-        if self.xp>=xp_needed:
-            next_rank=RANKS[current_rank_index+1]
-            self.rank=next_rank
+        current_rank_index = RANKS.index(self.rank)
+        xp_needed = RANK_XP_THRESHOLDS[self.rank]
+
+        if self.xp >= xp_needed:
+            # Standard Rank Up
+            next_rank = RANKS[current_rank_index + 1]
+            self.rank = next_rank
             print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
             self.update_config()
-            print(f"Agent {self.agent_id}'s capabilities have been upgraded. New Model {self.model}.")
+            print(f"Agent {self.agent_id}'s capabilities have been upgraded. New Model: {self.model}")
+
+            # --- NEW: Class Advancement Logic ---
+            self._check_for_class_advancement()
+
+    def _check_for_class_advancement(self):
+        """Promotes the agent to a new specialty based on its rank."""
+        promoted = False
+        if self.specialty == "Researcher" and self.rank == "C":
+            self.specialty = "Writer"
+            promoted = True
+        elif self.specialty == "Writer" and self.rank == "A":
+            self.specialty = "Editor"
+            promoted = True
+
+        elif self.specialty == "Junior Dev" and self.rank == "C":
+            self.specialty = "Software Engineer"
+            promoted = True
+        elif self.specialty == "Software Engineer" and self.rank == "A":
+            self.specialty = "System Architect"
+            promoted = True
+
+        if promoted:
+            print(f"🌟 **CLASS ADVANCEMENT!** Agent {self.agent_id} has been promoted to a '{self.specialty}'! 🌟")
+            # Update the agent's internal prompt to reflect its new role
+            self._update_config()
 
     def to_dict(self):
         """
