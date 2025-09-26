@@ -24,18 +24,40 @@ class ShadowAgent:
         self.system_prompt = self.guild_config["prompts"].get(self.specialty, "You are a helpful assistant.")
 
     def perform_task(self, prompt):
-        print(f"\nAgent {self.agent_id} ({self.rank} Rank, Specialty: {self.specialty}) is starting a text task...")
+        """
+        A more advanced method where the agent can think and decide to use tools
+        """
+        print(f"\nAgent {self.agent_id} ({self.rank} Rank is analyzing the task: '{prompt[:50]}...'")
+        # 1. Decision Making: Does this task require a tool?
+        # For now, we'll give tool access to D-Rank and above.
+        has_tool_access = RANKS.index(self.rank) >= RANKS.index("D")
+        # A simple logic to decide if a search is needed.
+        requires_search = any(kw in prompt.lower() for kw in ["current", "latest", "what is the", "who is"])
+        if has_tool_access and requires_search:
+            # 2. Tool Use: Agent decides to use the web search tool.
+            print(f"Agent {self.agent_id} decided a web search is necessary.")
+            search_result = web_search(prompt)
+
+            # 3. Integration: Agent incorporates the tool's result into its final prompt.
+            final_prompt = f"Based on the following real-time information, please provide a comprehensive answer to the user's original request.\n\nINFORMATION:\n{search_result}\n\nUSER REQUEST:\n{prompt}"
+            print("Agent is formulating a final answer using the search results...")
+
+        else:
+            # If no tool is needed or accessible, proceed as normal.
+            final_prompt = prompt
+
+            # 4. Final Response Generation
         try:
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": final_prompt}
                 ]
             )
             return response.choices[0].message.content
         except Exception as e:
-            print(f"An error occurred during text task: {e}")
+            print(f"An error occurred during task execution: {e}")
             return None
 
     def create_image(self, prompt):

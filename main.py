@@ -1,30 +1,25 @@
 # main.py
 from monarch import Monarch
 
-# Initialize the Monarch. Since army.json is gone, it will start fresh.
 monarch_controller = Monarch()
 print("\n" + "="*50)
 
-# --- Define a complex job that requires high-rank agents ---
-complex_task = "Create a Python script for a basic command-line calculator that can add, subtract, multiply, and divide."
+# --- Test a job that requires a tool ---
+# We'll use a simple, single-step job for this test.
+# Make sure you have a D-Rank or higher "Researcher" agent.
+# If not, run a few writer jobs first to level one up.
+tool_task = "What is the latest news about NASA's Artemis program?"
+print(f"\n[USER JOB REQUIRING A TOOL]: {tool_task}")
 
-print(f"\n[USER JOB]: {complex_task}")
-
-# --- Execute the job ---
-final_product, job_history = monarch_controller.execute_job(complex_task)
-
-print("\n--------------------------")
-if final_product:
-    print("\n--- MONARCH'S FINAL DELIVERABLE ---")
-    print(final_product)
-    print("\n--- JOB HISTORY ---")
-    for entry in job_history:
-        print(entry)
+# For this test, let's just get the best researcher to do it.
+researcher_agent = monarch_controller.get_agent("Researcher", monarch_controller.guilds["Writer"])
+if researcher_agent:
+    final_report = researcher_agent.perform_task(tool_task)
+    if final_report:
+        print("\n--- AGENT'S FINAL REPORT (WITH TOOL) ---")
+        print(final_report)
 else:
-    print("The job could not be completed.")
-
+    print("No researcher agent found.")
 
 print("\n" + "="*50)
-
-# Save the updated state of the army
 monarch_controller.save_army()
