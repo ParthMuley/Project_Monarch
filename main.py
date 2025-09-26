@@ -1,29 +1,30 @@
 # main.py
-from dotenv import load_dotenv
 from monarch import Monarch
 
-load_dotenv(override=True)
-
+# Initialize the Monarch. Since army.json is gone, it will start fresh.
 monarch_controller = Monarch()
 print("\n" + "="*50)
 
-# --- Define a single, complex, multi-guild prompt ---
-master_prompt = "Generate a technical report on the performance of a Python function that calculates Fibonacci numbers, and you must include the function's complete code in the report."
+# --- Define a complex job that requires high-rank agents ---
+complex_task = "Create a Python script for a basic command-line calculator that can add, subtract, multiply, and divide."
 
-print(f"\n[USER'S AUTONOMOUS JOB]: {master_prompt}")
+print(f"\n[USER JOB]: {complex_task}")
 
-# --- Give the Monarch the high-level task ---
-# It will now create the plan AND execute it.
-final_artifacts, job_history = monarch_controller.execute_complex_job(master_prompt)
+# --- Execute the job ---
+final_product, job_history = monarch_controller.execute_job(complex_task)
 
 print("\n--------------------------")
-if final_artifacts:
-    print("\n--- MONARCH'S FINAL DELIVERABLE (AUTONOMOUSLY GENERATED) ---")
-    final_report = f"## Technical Report\n\n{final_artifacts.get('report', '')}\n\n## Appendix: Source Code\n\n```python\n{final_artifacts.get('code', '')}\n```"
-    print(final_report)
+if final_product:
+    print("\n--- MONARCH'S FINAL DELIVERABLE ---")
+    print(final_product)
+    print("\n--- JOB HISTORY ---")
+    for entry in job_history:
+        print(entry)
 else:
-    print("The collaborative job could not be completed.")
+    print("The job could not be completed.")
+
 
 print("\n" + "="*50)
 
+# Save the updated state of the army
 monarch_controller.save_army()

@@ -1,0 +1,56 @@
+{
+  "Writer": {
+    "keywords": ["report", "write", "summary", "blog", "describe", "story"],
+    "start_role": "Researcher",
+    "prompts": {
+      "Researcher": "You are a novice research assistant...",
+      "Writer": "You are a skilled writer...",
+      "Editor": "You are an expert editor...",
+      "Integrator": "You are a master story assembler. Your job is to take an outline, a draft, and a final edited version and combine them into a single, polished final story. Present the final, edited version as the main text."
+    },
+    "career_path": [
+      {"from": "Researcher", "to": "Writer", "at_rank": "C"},
+      {"from": "Writer", "to": "Editor", "at_rank": "A"}
+    ],
+    "workflow": [
+      {"role": "Researcher", "min_rank": "F", "task": "Create a concise, bulleted outline for the following story request: {request}", "artifact_name": "outline"},
+      {"role": "Writer", "min_rank": "C", "task": "Using the following outline, write a detailed first draft of the story. \n\nOUTLINE:\n{outline}", "artifact_name": "draft"},
+      {"role": "Editor", "min_rank": "A", "task": "Review the following draft for style, pacing, and clarity. Polish it into a final, high-quality version. \n\nDRAFT:\n{draft}", "artifact_name": "report"},
+      {"role": "Integrator", "min_rank": "S", "task": "Assemble the final story. The final output should be the polished, edited version of the story. \n\nFINAL EDITED VERSION:\n{report}", "artifact_name": "final_report"}
+    ]
+  },
+  "Coder": {
+    "keywords": ["code", "script", "function", "program", "app", "class"],
+    "start_role": "Junior Dev",
+    "prompts": {
+      "Junior Dev": "You are a Junior Developer...",
+      "Software Engineer": "You are a Software Engineer...",
+      "System Architect": "You are a System Architect...",
+      "Integrator": "You are a master report assembler. Assemble a final technical report with three sections: '1. The Plan', '2. The Code', and '3. The Review'."
+    },
+    "career_path": [
+      {"from": "Junior Dev", "to": "Software Engineer", "at_rank": "C"},
+      {"from": "Software Engineer", "to": "System Architect", "at_rank": "A"}
+    ],
+    "workflow": [
+      {"role": "Junior Dev", "min_rank": "F", "task": "Create a step-by-step plan... for: {request}", "artifact_name": "plan"},
+      {"role": "Software Engineer", "min_rank": "C", "task": "Based on the following plan, write the complete Python code...\n\nPLAN:\n{plan}", "artifact_name": "code"},
+      {"role": "System Architect", "min_rank": "A", "task": "Review the following Python code...\n\nCODE:\n{code}", "artifact_name": "review"},
+      {"role": "Integrator", "min_rank": "S", "task": "Assemble a final technical report...\n\nPLAN:\n{plan}\n\nCODE:\n{code}\n\nREVIEW:\n{review}", "artifact_name": "final_report"}
+    ]
+  },
+  "Artist": {
+    "keywords": ["draw", "image", "logo", "picture", "photo", "illustrate", "art"],
+    "start_role": "Illustrator",
+    "prompts": {
+      "Illustrator": "You are a creative illustrator...",
+      "Art Director": "You are an Art Director..."
+    },
+    "career_path": [
+      {"from": "Illustrator", "to": "Art Director", "at_rank": "A"}
+    ],
+    "workflow": [
+      {"role": "Illustrator", "min_rank": "A", "task": "{request}", "artifact_name": "image_url"}
+    ]
+  }
+}

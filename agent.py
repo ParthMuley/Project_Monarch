@@ -1,161 +1,81 @@
+# agent.py
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+
 load_dotenv(override=True)
+client = OpenAI()
 
-client=OpenAI()
-
-# --- NEW: Define Rank-based configurations ---
-AGENT_CONFIGS = {
-    "F": {"model": "gpt-3.5-turbo", "system_prompt": "You are a novice assistant. Your answers are simple and direct."},
-    "E": {"model": "gpt-3.5-turbo", "system_prompt": "You are a competent assistant. Provide clear and helpful answers."},
-    "D": {"model": "gpt-3.5-turbo", "system_prompt": "You are a skilled assistant. Your answers are well-structured and detailed."},
-    "C": {"model": "gpt-4o", "system_prompt": "You are a highly skilled assistant. Your answers are insightful and well-organized."},
-    "B": {"model": "gpt-4o", "system_prompt": "You are an expert assistant. Your answers are comprehensive, factual, and reflect deep knowledge."},
-    "A": {"model": "gpt-4o", "system_prompt": "You are a leading expert. Your answers are authoritative, nuanced, and anticipate user needs."},
-    "S": {"model": "gpt-4o", "system_prompt": "You are a master of your craft. Your answers are groundbreaking, clear, and set the standard for excellence."}
-}
-
-CODER_PROMPTS = {
-    "Junior Dev": "You are a Junior Developer. Write Clean, Simple and functional code. Add comments to explain your logic. ",
-    "Software Engineer":"You are a Software Engineer. Write efficient, well-structured and production-ready code. Follow best practices and include docstring.",
-    "System Architect": "You are a System Architect. Design robust, scalable, and high level system architecture. Think about components, data flow and trade-offs. "
-}
-
-
-PLANNER_PROMPT = """
-You are a master project planner AI. Your sole purpose is to decompose a user's request into a structured, multi-step plan.
-You MUST adhere to the following strict rules:
-1. Your entire response MUST be a valid JSON object and nothing else.
-2. The JSON object must be a list of dictionaries.
-3. Each dictionary represents a sub-task and must contain a "guild" ('Coder' or 'Writer') and a "prompt".
-4. If a task depends on a previous task's output, use a placeholder like {CODE} or {REPORT} in the prompt.
-5. DO NOT include any introductory text, explanations, or conversational filler like "Sure, here is the plan:".
-6. DO NOT wrap the JSON in markdown code blocks like ```json ... ```.
-
-Example Request: "Create a webpage that explains bubble sort and show the code for it."
-Example JSON Output:
-[
-    {
-        "guild": "Coder",
-        "prompt": "Write a Python function that implements the bubble sort algorithm."
-    },
-    {
-        "guild": "Writer",
-        "prompt": "Write the text for a webpage that explains the bubble sort algorithm. Use the following code as a reference: {CODE}"
-    }
-]
-"""
-
-RANK_XP_THRESHOLDS={
-    "F":50, "E":150, "D":300, "C":600,
-    "B":1200, "A":2500, "S":5000
-}
-RANKS=list(RANK_XP_THRESHOLDS.keys())
+RANK_XP_THRESHOLDS = {"F": 50, "E": 150, "D": 300, "C": 600, "B": 1200, "A": 2500, "S": 5000}
+RANKS = list(RANK_XP_THRESHOLDS.keys())
 
 class ShadowAgent:
-    """
-    Represents a single agent in Monarch system.
-    """
-    def __init__(self, agent_id, rank, specialty):
+    def __init__(self, agent_id, rank, specialty, guild_config):
         self.agent_id = agent_id
         self.rank = rank
         self.specialty = specialty
-        self.xp=0
-        self.update_config()
-        print(f"Agent {self.agent_id}({self.rank} Rank {self.specialty}) has been created. ")
+        self.xp = 0
+        self.guild_config = guild_config
+        self._update_config()
+        print(f"Agent {self.agent_id} ({self.rank} Rank {self.specialty}) has been created.")
 
-    def update_config(self):
-        """
-        Sets the agent's model and prompt based on its content rank and speciality.
-        """
-        config = AGENT_CONFIGS.get(self.rank, AGENT_CONFIGS["F"])
-        self.model = config["model"]
-        base_prompt = CODER_PROMPTS.get(self.specialty,config["system_prompt"])
-        self.system_prompt = f"{base_prompt} Your primary specialty is: {self.specialty}."
-
-        if self.specialty == "Planner":
-            base_prompt=PLANNER_PROMPT
-
-        self.system_prompt=f"{base_prompt} Your primary specialty is: {self.specialty}."
-
+    def _update_config(self):
+        """Sets the agent's prompt based on its guild configuration."""
+        self.system_prompt = self.guild_config["prompts"].get(self.specialty, "You are a helpful assistant.")
 
     def perform_task(self, prompt):
-        """
-        Perform a task using the specified AI model.
-        The model choice can be tied to rank later.
-        """
-        print(f"\n Agent {self.agent_id} is starting a task...")
+        print(f"\nAgent {self.agent_id} ({self.rank} Rank, Specialty: {self.specialty}) is starting a text task...")
         try:
             response = client.chat.completions.create(
-                model=self.model,
+                model="gpt-4o",
                 messages=[
-                    {"role": "system", "content":self.system_prompt},
+                    {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt}
                 ]
             )
-            result=response.choices[0].message.content
-            print(f"Task completed successfully by {self.agent_id}.")
-            return result
+            return response.choices[0].message.content
         except Exception as e:
-            print(f"An error occurred: {e}.")
+            print(f"An error occurred during text task: {e}")
+            return None
+
+    def create_image(self, prompt):
+        print(f"\nAgent {self.agent_id} ({self.rank} Rank {self.specialty}) is creating an image...")
+        try:
+            response = client.images.generate(model="dall-e-3", prompt=prompt, size="1024x1024", n=1)
+            return response.data[0].url
+        except Exception as e:
+            print(f"An error occurred during image creation: {e}")
             return None
 
     def gain_xp(self, points):
-        """
-        Adds XP and checks if the agent can rank up.
-        """
-        self.xp+=points
+        self.xp += points
         print(f"Agent {self.agent_id} gained {points} XP. Total XP: {self.xp}")
-        self.check_for_rank_up()
+        self._check_for_rank_up()
 
-    def check_for_rank_up(self):
-        """ Checks if the agent has enough XP to advance to the next rank."""
+    def _check_for_rank_up(self):
         if self.rank == "S": return
+        if self.xp >= RANK_XP_THRESHOLDS.get(self.rank, float('inf')):
+            previous_rank = self.rank  # Remember the rank the agent is leaving
 
-        current_rank_index = RANKS.index(self.rank)
-        xp_needed = RANK_XP_THRESHOLDS[self.rank]
-
-        if self.xp >= xp_needed:
-            # Standard Rank Up
-            next_rank = RANKS[current_rank_index + 1]
-            self.rank = next_rank
+            # 1. Promote Rank First
+            current_rank_index = RANKS.index(self.rank)
+            self.rank = RANKS[current_rank_index + 1]
             print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
-            self.update_config()
-            print(f"Agent {self.agent_id}'s capabilities have been upgraded. New Model: {self.model}")
 
-            # --- NEW: Class Advancement Logic ---
-            self._check_for_class_advancement()
+            # 2. THEN, check if leaving the previous rank triggered a class advancement
+            self._check_for_class_advancement(previous_rank)
 
-    def _check_for_class_advancement(self):
-        """Promotes the agent to a new specialty based on its rank."""
-        promoted = False
-        if self.specialty == "Researcher" and self.rank == "C":
-            self.specialty = "Writer"
-            promoted = True
-        elif self.specialty == "Writer" and self.rank == "A":
-            self.specialty = "Editor"
-            promoted = True
-
-        elif self.specialty == "Junior Dev" and self.rank == "C":
-            self.specialty = "Software Engineer"
-            promoted = True
-        elif self.specialty == "Software Engineer" and self.rank == "A":
-            self.specialty = "System Architect"
-            promoted = True
-
-        if promoted:
-            print(f"🌟 **CLASS ADVANCEMENT!** Agent {self.agent_id} has been promoted to a '{self.specialty}'! 🌟")
-            # Update the agent's internal prompt to reflect its new role
+            # 3. Finally, update the config with the new rank/specialty
             self._update_config()
 
+    def _check_for_class_advancement(self, rank_they_are_leaving):
+        """Promotes the agent based on the rank it just completed."""
+        for promotion in self.guild_config.get("career_path", []):
+            if promotion["from"] == self.specialty and rank_they_are_leaving == promotion["at_rank"]:
+                self.specialty = promotion["to"]
+                print(f"🌟 **CLASS ADVANCEMENT!** Agent {self.agent_id} has been promoted to a '{self.specialty}'! 🌟")
+                # The _update_config call will happen once in _check_for_rank_up
+                break
+
     def to_dict(self):
-        """
-        Converts the agent's data to a dictionary for saving.
-        """
-        return {
-            "agent_id": self.agent_id,
-            "rank": self.rank,
-            "specialty": self.specialty,
-            "xp": self.xp
-        }
+        return {"agent_id": self.agent_id, "rank": self.rank, "specialty": self.specialty, "xp": self.xp}
