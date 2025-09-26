@@ -1,8 +1,8 @@
 import os
-from dotenv import load_dotenv
 from openai import OpenAI
+from dotenv import load_dotenv
+load_dotenv(override=True)
 
-load_dotenv()
 client=OpenAI()
 
 # --- NEW: Define Rank-based configurations ---
@@ -14,6 +14,12 @@ AGENT_CONFIGS = {
     "B": {"model": "gpt-4o", "system_prompt": "You are an expert assistant. Your answers are comprehensive, factual, and reflect deep knowledge."},
     "A": {"model": "gpt-4o", "system_prompt": "You are a leading expert. Your answers are authoritative, nuanced, and anticipate user needs."},
     "S": {"model": "gpt-4o", "system_prompt": "You are a master of your craft. Your answers are groundbreaking, clear, and set the standard for excellence."}
+}
+
+CODER_PROMPTS = {
+    "Junior Dev": "You are a Junior Developer. Write Clean, Simple and functional code. Add comments to explain your logic. ",
+    "Software Engineer":"You are a Software Engineer. Write efficient, well-structured and production-ready code. Follow best practices and include docstring.",
+    "System Architect": "You are a System Architect. Design robust, scalable, and high level system architecture. Think about components, data flow and trade-offs. "
 }
 
 RANK_XP_THRESHOLDS={
@@ -36,12 +42,12 @@ class ShadowAgent:
 
     def update_config(self):
         """
-        Sets the agent's model and prompt based on its content rank.
+        Sets the agent's model and prompt based on its content rank and speciality.
         """
         config = AGENT_CONFIGS.get(self.rank, AGENT_CONFIGS["F"])
         self.model = config["model"]
-        base_prompt = config["system_prompt"]
-        self.system_prompt = f"{base_prompt} Your specialty: {self.specialty}."
+        base_prompt = CODER_PROMPTS.get(self.specialty,config["system_prompt"])
+        self.system_prompt = f"{base_prompt} Your primary specialty is: {self.specialty}."
 
 
     def perform_task(self, prompt):
@@ -85,7 +91,7 @@ class ShadowAgent:
             next_rank = RANKS[current_rank_index + 1]
             self.rank = next_rank
             print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
-            self._update_config()
+            self.update_config()
             print(f"Agent {self.agent_id}'s capabilities have been upgraded. New Model: {self.model}")
 
             # --- NEW: Class Advancement Logic ---
@@ -99,6 +105,13 @@ class ShadowAgent:
             promoted = True
         elif self.specialty == "Writer" and self.rank == "A":
             self.specialty = "Editor"
+            promoted = True
+
+        elif self.specialty == "Junior Dev" and self.rank == "C":
+            self.specialty = "Software Engineer"
+            promoted = True
+        elif self.specialty == "Software Engineer" and self.rank == "A":
+            self.specialty = "System Architect"
             promoted = True
 
         if promoted:

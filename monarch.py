@@ -44,14 +44,15 @@ class Monarch:
         except Exception as e:
             print(f"Could not load army file. Starting fresh. Error: {e}")
 
-    def determine_specialty(self, user_prompt):
-        """Helper function to decide the specialty."""
+    def determine_guild(self, user_prompt):
+        """
+        Determine the required GUILD  and starting specialty for a task.
+        Acts as the high-level dispatcher.
+        """
         prompt = user_prompt.lower()
-        if "summarize" in prompt or "write" in prompt or "describe" in prompt:
-            return "Copywriter"
-        if "code" in prompt or "script" in prompt or "function" in prompt:
-            return "Developer"
-        return "Generalist"
+        if any(keyword in prompt for keyword in ["code", "script", "methods", "program", "app"]):
+            return "Coder"  # Starting role for the Coder Guild
+        return "Writer"
 
     def get_agent(self, specialty, min_rank="F"):
         """Finds an available agent or creates one if none exist."""
@@ -73,17 +74,28 @@ class Monarch:
             self.army[agent_id] = new_agent
             return new_agent
 
-        # --- NEW ORCHESTRATION METHOD ---
-
     def execute_job(self, user_request):
-        """Manages a multi-step job using a hierarchy of agents."""
+        """Orchestrates a multi-step job based on the determined Guild."""
+        guild = self.determine_guild(user_request)
         current_job = Job(user_request)
         current_job.status = "IN_PROGRESS"
 
+        print(f"Monarch: Task assigned to the {guild}'s Guild.")
+
+        if guild == "Writer":
+            return self.execute_writer_job(current_job)
+        elif guild == "Coder":
+            return self.execute_coder_job(current_job)
+
+
+        # --- NEW ORCHESTRATION METHOD ---
+
+    def execute_writer_job(self, current_job):
+        """Manages a multi-step job using a hierarchy of agents."""
         try:
             # Step 1: Outlining by a Researcher (Rank F+)
             outliner = self.get_agent("Researcher", "F")
-            outline_prompt = f"Create a concise, bulleted outline for a report on the following topic: {user_request}"
+            outline_prompt = f"Create a concise, bulleted outline for a report on the following topic: {current_job.user_request}"
             outline = outliner.perform_task(outline_prompt)
             if not outline: raise Exception("Outlining failed.")
             current_job.artifacts['outline'] = outline
@@ -115,4 +127,44 @@ class Monarch:
         except Exception as e:
             current_job.status = "FAILED"
             print(f"Job {current_job.id} failed. Error: {e}")
+            return None, current_job.history
+
+    def execute_coder_job(self, current_job):
+        """Handles the multi-step process for the Coder's Guild."""
+        try:
+            # Step 1: Planning by a Junior Dev (Rank F+)
+            planner = self.get_agent("Junior Dev", "F")
+            plan_prompt = f"Create a simple, step-by-step plan in plain English to create a Python script for the following request. Do not write any code. Request: {current_job.user_request}"
+            plan = planner.perform_task(plan_prompt)
+            if not plan: raise Exception("Planning failed.")
+            current_job.artifacts['plan'] = plan
+            current_job.add_history(planner.agent_id, "Created Plan", plan)
+            planner.gain_xp(10)
+
+            # Step 2: Implementation by a Software Engineer (Rank C+)
+            coder = self.get_agent("Software Engineer", "C")
+            code_prompt = f"Based on the following plan, write the complete Python code. Only write the code, nothing else. \n\nPLAN:\n{plan}"
+            code = coder.perform_task(code_prompt)
+            if not code: raise Exception("Implementation failed.")
+            current_job.artifacts['code'] = code
+            current_job.add_history(coder.agent_id, "Wrote Code", code)
+            coder.gain_xp(25)
+
+            # Step 3: Testing by a System Architect (Rank A+)
+            tester = self.get_agent("System Architect", "A")
+            test_prompt = f"Review the following Python code. First, explain any potential bugs or improvements. Second, write a simple test case to verify its functionality. \n\nCODE:\n{code}"
+            review = tester.perform_task(test_prompt)
+            if not review: raise Exception("Testing failed.")
+            current_job.artifacts['review'] = review
+            current_job.add_history(tester.agent_id, "Reviewed and Tested Code", review)
+            tester.gain_xp(50)
+
+            current_job.status = "COMPLETED"
+            final_product = f"--- PLAN ---\n{plan}\n\n--- CODE ---\n{code}\n\n--- REVIEW & TESTS ---\n{review}"
+            print(f"\nCoder Guild Job {current_job.id} completed successfully!")
+            return final_product, current_job.history
+
+        except Exception as e:
+            current_job.status = "FAILED"
+            print(f"Coder Guild Job {current_job.id} failed. Error: {e}")
             return None, current_job.history
