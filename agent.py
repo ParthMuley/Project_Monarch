@@ -22,6 +22,31 @@ CODER_PROMPTS = {
     "System Architect": "You are a System Architect. Design robust, scalable, and high level system architecture. Think about components, data flow and trade-offs. "
 }
 
+
+PLANNER_PROMPT = """
+You are a master project planner AI. Your sole purpose is to decompose a user's request into a structured, multi-step plan.
+You MUST adhere to the following strict rules:
+1. Your entire response MUST be a valid JSON object and nothing else.
+2. The JSON object must be a list of dictionaries.
+3. Each dictionary represents a sub-task and must contain a "guild" ('Coder' or 'Writer') and a "prompt".
+4. If a task depends on a previous task's output, use a placeholder like {CODE} or {REPORT} in the prompt.
+5. DO NOT include any introductory text, explanations, or conversational filler like "Sure, here is the plan:".
+6. DO NOT wrap the JSON in markdown code blocks like ```json ... ```.
+
+Example Request: "Create a webpage that explains bubble sort and show the code for it."
+Example JSON Output:
+[
+    {
+        "guild": "Coder",
+        "prompt": "Write a Python function that implements the bubble sort algorithm."
+    },
+    {
+        "guild": "Writer",
+        "prompt": "Write the text for a webpage that explains the bubble sort algorithm. Use the following code as a reference: {CODE}"
+    }
+]
+"""
+
 RANK_XP_THRESHOLDS={
     "F":50, "E":150, "D":300, "C":600,
     "B":1200, "A":2500, "S":5000
@@ -48,6 +73,11 @@ class ShadowAgent:
         self.model = config["model"]
         base_prompt = CODER_PROMPTS.get(self.specialty,config["system_prompt"])
         self.system_prompt = f"{base_prompt} Your primary specialty is: {self.specialty}."
+
+        if self.specialty == "Planner":
+            base_prompt=PLANNER_PROMPT
+
+        self.system_prompt=f"{base_prompt} Your primary specialty is: {self.specialty}."
 
 
     def perform_task(self, prompt):
