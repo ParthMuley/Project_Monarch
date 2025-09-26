@@ -1,22 +1,24 @@
+# main.py
 from monarch import Monarch
 
-monarch_controller=Monarch()
-print("\n------------------------------")
+monarch_controller = Monarch()
+print("\n--------------------------")
 
-tasks = [
-    "Write a short, exciting description for a new sci-fi movie.",
-    "Summarize the plot of 'The Matrix' in two sentences.",
-    "Describe the benefits of drinking water.",
-    "Draft a tweet about a new tech product launch.",
-]
+# Define a complex job for the Monarch
+complex_task = "The impact of renewable energy on the global economy"
 
-for i, task in enumerate(tasks, 1):
-    print(f"\n[USER COMMAND #{i}]: {task}")
-    result = monarch_controller.assign_task(task)
-    if result:
-        print("\n--- Monarch's Report ---")
-        print(result)
-        print("------------------------")
+print(f"\n[USER'S COMPLEX JOB]: Create a report on '{complex_task}'")
+final_product, job_history = monarch_controller.execute_job(complex_task)
 
-# --- ADD THIS LINE AT THE VERY END ---
+print("\n--------------------------")
+if final_product:
+    print("\n--- MONARCH'S FINAL DELIVERABLE ---")
+    print(final_product)
+    print("\n--- JOB HISTORY ---")
+    for entry in job_history:
+        print(entry)
+else:
+    print("The job could not be completed.")
+
+# Don't forget to save the army's progress!
 monarch_controller.save_army()

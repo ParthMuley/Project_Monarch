@@ -75,17 +75,36 @@ class ShadowAgent:
 
     def check_for_rank_up(self):
         """ Checks if the agent has enough XP to advance to the next rank."""
-        if self.rank=="S":
-            return
-        current_rank_index=RANKS.index(self.rank)
-        xp_needed=RANK_XP_THRESHOLDS[self.rank]
+        if self.rank == "S": return
 
-        if self.xp>=xp_needed:
-            next_rank=RANKS[current_rank_index+1]
-            self.rank=next_rank
+        current_rank_index = RANKS.index(self.rank)
+        xp_needed = RANK_XP_THRESHOLDS[self.rank]
+
+        if self.xp >= xp_needed:
+            # Standard Rank Up
+            next_rank = RANKS[current_rank_index + 1]
+            self.rank = next_rank
             print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
-            self.update_config()
-            print(f"Agent {self.agent_id}'s capabilities have been upgraded. New Model {self.model}.")
+            self._update_config()
+            print(f"Agent {self.agent_id}'s capabilities have been upgraded. New Model: {self.model}")
+
+            # --- NEW: Class Advancement Logic ---
+            self._check_for_class_advancement()
+
+    def _check_for_class_advancement(self):
+        """Promotes the agent to a new specialty based on its rank."""
+        promoted = False
+        if self.specialty == "Researcher" and self.rank == "C":
+            self.specialty = "Writer"
+            promoted = True
+        elif self.specialty == "Writer" and self.rank == "A":
+            self.specialty = "Editor"
+            promoted = True
+
+        if promoted:
+            print(f"🌟 **CLASS ADVANCEMENT!** Agent {self.agent_id} has been promoted to a '{self.specialty}'! 🌟")
+            # Update the agent's internal prompt to reflect its new role
+            self._update_config()
 
     def to_dict(self):
         """

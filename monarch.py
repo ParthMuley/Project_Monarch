@@ -1,6 +1,7 @@
 # monarch.py
 import json
 from logging import exception
+from Job import Job
 
 from agent import ShadowAgent
 
@@ -52,29 +53,66 @@ class Monarch:
             return "Developer"
         return "Generalist"
 
-    def find_available_agent(self, specialty):
-        """Finds an existing agent of a specific specialty."""
+    def get_agent(self, specialty, min_rank="F"):
+        """Finds an available agent or creates one if none exist."""
+        # This is a more advanced find logic, looking for best available rank
+        best_agent = None
         for agent in self.army.values():
-            if agent.specialty == specialty:
-                return agent
-        return None
+            if agent.specialty == specialty and agent.rank >= min_rank:
+                if best_agent is None or agent.rank > best_agent.rank:
+                    best_agent = agent
 
-    def assign_task(self, user_prompt):
-        specialty = self.determine_specialty(user_prompt)
-        agent_to_assign = self.find_available_agent(specialty)
-        if not agent_to_assign:
-            # If no agent is found, summon a new one and add it to the army
-            agent_id = f"{specialty[0]}-{len(self.army) + 1:03d}"
-            print(f"Monarch: No available '{specialty}'. Summoning new agent {agent_id}.")
-            agent_to_assign = ShadowAgent(agent_id=agent_id, rank="F", specialty=specialty)
-            self.army[agent_id] = agent_to_assign
+        if best_agent:
+            print(f"Monarch: Found available agent {best_agent.agent_id} for the job.")
+            return best_agent
         else:
-            # If an agent is found, reuse it
-            print(f"Monarch: Found available agent {agent_to_assign.agent_id}. Assigning task.")
+            # If no suitable agent is found, create a new one
+            agent_id = f"{specialty[0]}-{len(self.army) + 1:03d}"
+            print(f"Monarch: No '{specialty}' of rank {min_rank}+. Summoning new agent {agent_id}.")
+            new_agent = ShadowAgent(agent_id=agent_id, rank=min_rank, specialty=specialty)
+            self.army[agent_id] = new_agent
+            return new_agent
 
-        # Delegate the task and award XP on success
-        result = agent_to_assign.perform_task(user_prompt)
-        if result:
-            agent_to_assign.gain_xp(15)  # Award 15 XP for a completed task
+        # --- NEW ORCHESTRATION METHOD ---
 
-        return result
+    def execute_job(self, user_request):
+        """Manages a multi-step job using a hierarchy of agents."""
+        current_job = Job(user_request)
+        current_job.status = "IN_PROGRESS"
+
+        try:
+            # Step 1: Outlining by a Researcher (Rank F+)
+            outliner = self.get_agent("Researcher", "F")
+            outline_prompt = f"Create a concise, bulleted outline for a report on the following topic: {user_request}"
+            outline = outliner.perform_task(outline_prompt)
+            if not outline: raise Exception("Outlining failed.")
+            current_job.artifacts['outline'] = outline
+            current_job.add_history(outliner.agent_id, "Generated Outline", outline)
+            outliner.gain_xp(10)
+
+            # Step 2: Drafting by a Writer (Rank C+)
+            writer = self.get_agent("Writer", "C")
+            draft_prompt = f"Using the following outline, write a detailed draft of the report. \n\nOUTLINE:\n{outline}"
+            draft = writer.perform_task(draft_prompt)
+            if not draft: raise Exception("Drafting failed.")
+            current_job.artifacts['draft'] = draft
+            current_job.add_history(writer.agent_id, "Wrote Draft", draft)
+            writer.gain_xp(25)  # More complex tasks grant more XP
+
+            # Step 3: Editing by an Editor (Rank A+)
+            editor = self.get_agent("Editor", "A")
+            edit_prompt = f"Review the following draft for clarity, accuracy, and style. Polish it into a final report. \n\nDRAFT:\n{draft}"
+            final_report = editor.perform_task(edit_prompt)
+            if not final_report: raise Exception("Editing failed.")
+            current_job.artifacts['final_report'] = final_report
+            current_job.add_history(editor.agent_id, "Finalized Report", final_report)
+            editor.gain_xp(50)
+
+            current_job.status = "COMPLETED"
+            print(f"\nJob {current_job.id} completed successfully!")
+            return final_report, current_job.history
+
+        except Exception as e:
+            current_job.status = "FAILED"
+            print(f"Job {current_job.id} failed. Error: {e}")
+            return None, current_job.history
