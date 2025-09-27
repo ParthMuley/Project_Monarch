@@ -2,6 +2,8 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+from tools import AVAILABLE_TOOLS
+import json
 
 load_dotenv(override=True)
 client = OpenAI()
@@ -16,49 +18,71 @@ class ShadowAgent:
         self.specialty = specialty
         self.xp = 0
         self.guild_config = guild_config
-        self._update_config()
+        self.update_config()
         print(f"Agent {self.agent_id} ({self.rank} Rank {self.specialty}) has been created.")
 
-    def _update_config(self):
+    def update_config(self):
         """Sets the agent's prompt based on its guild configuration."""
         self.system_prompt = self.guild_config["prompts"].get(self.specialty, "You are a helpful assistant.")
 
     def perform_task(self, prompt):
-        """
-        A more advanced method where the agent can think and decide to use tools
-        """
-        print(f"\nAgent {self.agent_id} ({self.rank} Rank is analyzing the task: '{prompt[:50]}...'")
-        # 1. Decision Making: Does this task require a tool?
-        # For now, we'll give tool access to D-Rank and above.
-        has_tool_access = RANKS.index(self.rank) >= RANKS.index("D")
-        # A simple logic to decide if a search is needed.
-        requires_search = any(kw in prompt.lower() for kw in ["current", "latest", "what is the", "who is"])
-        if has_tool_access and requires_search:
-            # 2. Tool Use: Agent decides to use the web search tool.
-            print(f"Agent {self.agent_id} decided a web search is necessary.")
-            search_result = web_search(prompt)
+        """A more advanced method where the agent can decide to use tools based on its prompt."""
+        print(f"\nAgent {self.agent_id} ({self.rank} Rank) is analyzing the task: '{prompt[:50]}...'")
 
-            # 3. Integration: Agent incorporates the tool's result into its final prompt.
-            final_prompt = f"Based on the following real-time information, please provide a comprehensive answer to the user's original request.\n\nINFORMATION:\n{search_result}\n\nUSER REQUEST:\n{prompt}"
-            print("Agent is formulating a final answer using the search results...")
+        # 1. Decision Making: The agent uses a powerful model to decide if a tool is needed.
+        # This prompt asks the model to "think" and choose a tool.
+        tool_decision_prompt = f"""
+        You have access to the following tools: {list(AVAILABLE_TOOLS.keys())}.
+        Based on the user's request, should you use a tool?
+        If yes, respond with the JSON format: {{"tool_name": "name", "tool_input": "input for the tool"}}
+        If no, respond with "NO_TOOL".
 
-        else:
-            # If no tool is needed or accessible, proceed as normal.
+        User Request: "{prompt}"
+        """
+
+        try:
+            # The agent "thinks" about which tool to use
+            decision_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": "You are a reasoning engine that decides which tool to use."},
+                          {"role": "user", "content": tool_decision_prompt}]
+            ).choices[0].message.content
+
+            if "NO_TOOL" in decision_response:
+                # 2a. No Tool Used: Proceed with a standard text response.
+                print(f"Agent {self.agent_id} decided no tool is needed.")
+                final_prompt = prompt
+            else:
+                # 2b. Tool Used: Parse the decision and call the correct tool function.
+                tool_choice = json.loads(decision_response)
+                tool_name = tool_choice["tool_name"]
+                tool_input = tool_choice["tool_input"]
+
+                if tool_name in AVAILABLE_TOOLS:
+                    print(f"Agent {self.agent_id} decided to use the '{tool_name}' tool.")
+                    tool_function = AVAILABLE_TOOLS[tool_name]
+                    tool_result = tool_function(tool_input)
+
+                    # 3. Integration: The agent incorporates the tool's result.
+                    final_prompt = f"The user's request was: '{prompt}'. I used the '{tool_name}' tool and got this result: '{tool_result}'. Now, provide a comprehensive final answer."
+                else:
+                    final_prompt = prompt  # Fallback if tool name is wrong
+
+        except Exception as e:
+            print(f"An error occurred during tool decision: {e}. Proceeding without a tool.")
             final_prompt = prompt
 
-            # 4. Final Response Generation
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": final_prompt}
-                ]
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            print(f"An error occurred during task execution: {e}")
-            return None
+        # 4. Final Response Generation
+        final_response = client.chat.completions.create(
+            model="gpt-4o",  # Use a powerful model for the final answer
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": final_prompt}
+            ]
+        ).choices[0].message.content
+
+        return final_response
+
 
     def create_image(self, prompt):
         print(f"\nAgent {self.agent_id} ({self.rank} Rank {self.specialty}) is creating an image...")
@@ -72,32 +96,40 @@ class ShadowAgent:
     def gain_xp(self, points):
         self.xp += points
         print(f"Agent {self.agent_id} gained {points} XP. Total XP: {self.xp}")
-        self._check_for_rank_up()
+        self.check_for_rank_up()
 
-    def _check_for_rank_up(self):
+    def check_for_rank_up(self):
         if self.rank == "S": return
-        if self.xp >= RANK_XP_THRESHOLDS.get(self.rank, float('inf')):
-            previous_rank = self.rank  # Remember the rank the agent is leaving
 
-            # 1. Promote Rank First
+        # Check for promotions iteratively, in case of multiple rank-ups
+        while self.rank != "S":
             current_rank_index = RANKS.index(self.rank)
-            self.rank = RANKS[current_rank_index + 1]
-            print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
+            next_rank_index = current_rank_index + 1
 
-            # 2. THEN, check if leaving the previous rank triggered a class advancement
-            self._check_for_class_advancement(previous_rank)
+            if next_rank_index >= len(RANKS): break  # Should not happen if rank is not S, but safe check
 
-            # 3. Finally, update the config with the new rank/specialty
-            self._update_config()
+            next_rank = RANKS[next_rank_index]
+            xp_needed = RANK_XP_THRESHOLDS.get(next_rank)
 
-    def _check_for_class_advancement(self, rank_they_are_leaving):
-        """Promotes the agent based on the rank it just completed."""
+            if self.xp >= xp_needed:
+                # If XP is sufficient for the NEXT rank, then promote
+                previous_rank = self.rank
+                self.rank = next_rank
+                print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
+                self.check_for_class_advancement(previous_rank)
+                self.update_config()
+            else:
+                # If XP is not enough for the next rank, stop checking
+                break
+
+    def check_for_class_advancement(self):  # Argument removed
+        """Promotes the agent based on its current, newly achieved rank."""
         for promotion in self.guild_config.get("career_path", []):
-            if promotion["from"] == self.specialty and rank_they_are_leaving == promotion["at_rank"]:
+            # Check against the agent's NEW, current rank
+            if promotion["from"] == self.specialty and self.rank == promotion["at_rank"]:
                 self.specialty = promotion["to"]
                 print(f"🌟 **CLASS ADVANCEMENT!** Agent {self.agent_id} has been promoted to a '{self.specialty}'! 🌟")
-                # The _update_config call will happen once in _check_for_rank_up
-                break
+                break  # Important to stop after the first valid promotion
 
     def to_dict(self):
         return {"agent_id": self.agent_id, "rank": self.rank, "specialty": self.specialty, "xp": self.xp}
