@@ -2,6 +2,7 @@
 import json
 from agent import ShadowAgent, RANKS, RANK_XP_THRESHOLDS
 from Job import Job
+from memory import memorize
 
 
 class Monarch:
@@ -30,7 +31,7 @@ class Monarch:
         # Default to Writer if no other specific keywords are found.
         return "Writer", self.guilds["Writer"]
 
-    def get_agent(self, specialty, guild_config, min_rank="F"):
+    def _get_agent(self, specialty, guild_config, min_rank="F"):
         """Finds an existing qualified agent or creates a NEW F-Rank beginner."""
         # Find the best available agent that meets the minimum rank
         best_agent = None
@@ -86,33 +87,43 @@ class Monarch:
         # --- EXECUTION BASED ON ASSESSMENT ---
         if can_execute_full_workflow:
             print("Monarch: Qualified specialists found. Executing full multi-step workflow.")
-            # This is our existing, successful workflow logic
             for step in workflow:
                 role, min_rank, task_prompt, artifact_name = step["role"], step["min_rank"], step["task"], step[
                     "artifact_name"]
                 for key, value in current_job.artifacts.items():
                     task_prompt = task_prompt.replace(f"{{{key}}}", value)
                 task_prompt = task_prompt.replace("{request}", user_request)
-                agent = self.get_agent(role, guild_config, min_rank)
+                agent = self._get_agent(role, guild_config, min_rank)  # Corrected to self._get_agent
                 result = agent.perform_task(task_prompt) if guild_name != "Artist" else agent.create_image(task_prompt)
-                if not result:  # (Error handling is the same)
-                    current_job.status = "FAILED";
+                if not result:
+                    current_job.status = "FAILED"
                     return None, current_job.history
                 current_job.artifacts[artifact_name] = result
                 current_job.add_history(agent.agent_id, f"Completed step: {role}", result)
                 agent.gain_xp(20)
+
             final_artifact_name = workflow[-1]["artifact_name"]
-            return current_job.artifacts.get(final_artifact_name), current_job.history
+            final_product = current_job.artifacts.get(final_artifact_name)
+
+            # --- ADD MEMORIZE CALL HERE (for full workflow) ---
+            if final_product:
+                memorize(job_id=current_job.id, content=final_product)
+
+            return final_product, current_job.history
         else:
             # --- FALLBACK: "Best Effort" Mode ---
             print("Monarch: High-rank specialists not available. Falling back to 'Best Effort' mode.")
             start_role = guild_config["start_role"]
-            agent = self.get_agent(start_role, guild_config, "F")
+            agent = self._get_agent(start_role, guild_config, "F")  # Corrected to self._get_agent
 
             result = agent.perform_task(user_request) if guild_name != "Artist" else agent.create_image(user_request)
             if result:
-                agent.gain_xp(25)  # Extra XP for a solo complex job
+                agent.gain_xp(25)
                 current_job.add_history(agent.agent_id, "Completed job via Best Effort", result)
+
+                # --- ADD MEMORIZE CALL HERE (for Best Effort mode) ---
+                memorize(job_id=current_job.id, content=result)
+
                 return result, current_job.history
             else:
                 return None, [f"Best-effort attempt by {agent.agent_id} failed."]

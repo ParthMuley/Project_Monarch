@@ -1,12 +1,14 @@
 # job.py
 
 class Job:
-    def __init__(self, user_request):
+    def __init__(self, user_request, budget=200): # Give each job a default budget
         self.id = id(self)  # Unique ID for the job
         self.user_request = user_request
         self.status = "PENDING"
         self.history = []  # To log each step
         self.artifacts = {}  # To store outputs like 'outline', 'draft'
+        self.budget = budget
+        self.cost=0
         print(f"New Job created (ID: {self.id}) for request: '{self.user_request}'")
 
     def add_history(self, agent_id, action, result):

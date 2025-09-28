@@ -1,4 +1,13 @@
 {
+  "rank_costs": {
+    "F": 5,
+    "E": 8,
+    "D": 12,
+    "C": 20,
+    "B": 35,
+    "A": 50,
+    "S": 80
+  },
   "Writer": {
     "keywords": ["report", "write", "summary", "blog", "describe", "story"],
     "start_role": "Researcher",

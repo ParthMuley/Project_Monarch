@@ -3,6 +3,7 @@ import os
 from openai import OpenAI
 from dotenv import load_dotenv
 from tools import AVAILABLE_TOOLS
+from memory import recall
 import json
 
 load_dotenv(override=True)
@@ -28,6 +29,28 @@ class ShadowAgent:
     def perform_task(self, prompt):
         """A more advanced method where the agent can decide to use tools based on its prompt."""
         print(f"\nAgent {self.agent_id} ({self.rank} Rank) is analyzing the task: '{prompt[:50]}...'")
+
+        # --- NEW: Recall Step ---
+        # The agent first tries to recall similar past work from memory.
+        recalled_memories = recall(query=prompt)
+        memory_context = ""
+        if recalled_memories:
+            memory_context = "I found this in my memory from a similar past job, which might be a useful reference:\n---\n" + "\n\n".join(
+                recalled_memories) + "\n---"
+            print(f"Agent {self.agent_id} recalled relevant memories.")
+
+        # --- The rest of the method proceeds as before ---
+        # It will use the memory_context when deciding on a tool or formulating an answer.
+        tool_decision_prompt = f"""
+                {memory_context}
+
+                You have access to the following tools: {list(AVAILABLE_TOOLS.keys())}.
+                Based on the user's request, should you use a tool?
+                If yes, respond with the JSON format: {{"tool_name": "name", "tool_input": "input for the tool"}}
+                If no, respond with "NO_TOOL".
+
+                User Request: "{prompt}"
+                """
 
         # 1. Decision Making: The agent uses a powerful model to decide if a tool is needed.
         # This prompt asks the model to "think" and choose a tool.

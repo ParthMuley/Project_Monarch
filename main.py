@@ -1,20 +1,26 @@
 # main.py
 from monarch import Monarch
 
+# Initialize the Monarch. It will load the army, guilds, and memory.
 monarch_controller = Monarch()
 print("\n" + "="*50)
 
-# --- Test a job that requires the Code Interpreter tool ---
-coder_task = "Create a Python function that calculates the factorial of a number and write a test case to prove it works for the number 5."
+# --- Define the job we will use for the memory test ---
+memory_test_task = "Write a short Python script to ping a website and see if it's online."
 
-print(f"\n[USER JOB REQUIRING CODE INTERPRETER]: {coder_task}")
-coder_report, _ = monarch_controller.execute_job(coder_task)
+print(f"\n[USER JOB]: {memory_test_task}")
 
-if coder_report:
-    print("\n--- CODER GUILD DELIVERABLE ---")
-    print(coder_report)
+# --- Execute the job ---
+final_product, job_history = monarch_controller.execute_job(memory_test_task)
+
+print("\n--------------------------")
+if final_product:
+    print("\n--- MONARCH'S FINAL DELIVERABLE ---")
+    print(final_product)
 else:
-    print("Coder Guild job could not be completed.")
+    print("The job could not be completed.")
 
 print("\n" + "="*50)
+
+# Save the updated state of the army
 monarch_controller.save_army()
