@@ -9,7 +9,7 @@ class Monarch:
     def __init__(self, army_file="army.json", guild_config_file="guilds.json"):
         self.army = {}
         self.army_file = army_file
-        self.specialty_counter={}
+        self.specialty_counters={}
         self._load_guild_configs(guild_config_file)
         self._load_army()
         print(f"Monarch System Initialized. Managing {len(self.army)} agents across {len(self.guilds)} guilds.")
@@ -32,34 +32,34 @@ class Monarch:
         return "Writer", self.guilds["Writer"]
 
     def _get_agent(self, specialty, guild_config, min_rank="F"):
-        """Finds an existing qualified agent or creates a NEW F-Rank beginner."""
-        # Find the best available agent that meets the minimum rank
-        best_agent = None
+        """Finds the most cost-effective agent that meets the minimum rank."""
+
+        qualified_agents = []
         for agent in self.army.values():
             if agent.specialty == specialty and RANKS.index(agent.rank) >= RANKS.index(min_rank):
-                if best_agent is None or RANKS.index(agent.rank) > RANKS.index(best_agent.rank):
-                    best_agent = agent
+                qualified_agents.append(agent)
 
-        if best_agent:
-            print(f"Monarch: Found available agent {best_agent.agent_id} for the job.")
-            return best_agent
+        if qualified_agents:
+            # Sort agents by rank (cheapest first) and pick the first one
+            qualified_agents.sort(key=lambda x: RANKS.index(x.rank))
+            cheapest_agent = qualified_agents[0]
+            print(
+                f"Monarch: Found {len(qualified_agents)} qualified agents. Choosing the most cost-effective: {cheapest_agent.agent_id} ({cheapest_agent.rank} Rank).")
+            return cheapest_agent
 
-        # --- NEW LOGIC: Only create agents at the starting role ---
+        # --- Creation logic remains the same ---
         start_role = guild_config.get("start_role")
         if specialty == start_role:
             print(f"Monarch: No available '{specialty}'. Recruiting a new F-Rank agent.")
-            # Logic to create a new agent (always at F-Rank)
-            current_count = self.specialty_counter.get(specialty, 0) + 1
-            self.specialty_counter[specialty] = current_count
+            current_count = self.specialty_counters.get(specialty, 0) + 1
+            self.specialty_counters[specialty] = current_count
             agent_id = f"{specialty[0]}-{current_count:03d}"
             new_agent = ShadowAgent(agent_id, "F", specialty, guild_config)
             self.army[agent_id] = new_agent
             return new_agent
         else:
-            # If a high-level specialist is needed but doesn't exist, we cannot create one.
             return None
 
-        # In monarch.py, inside the Monarch class
 
     def _is_agent_available(self, specialty, min_rank):
         """Checks if a qualified agent exists without creating one."""
@@ -94,6 +94,14 @@ class Monarch:
                     task_prompt = task_prompt.replace(f"{{{key}}}", value)
                 task_prompt = task_prompt.replace("{request}", user_request)
                 agent = self._get_agent(role, guild_config, min_rank)  # Corrected to self._get_agent
+                # --- NEW: Budget Check ---
+                agent_cost = self.guilds["rank_costs"].get(agent.rank, 20)
+                if current_job.cost + agent_cost > current_job.budget:
+                    print(f"Job failed: Assigning agent {agent.agent_id} (cost: {agent_cost}) would exceed budget.")
+                    current_job.status = "FAILED"
+                    return None, current_job.history
+                current_job.cost += agent_cost
+                print(f"Monarch: Assigning agent {agent.agent_id}. Cost: {agent_cost}. Total cost: {current_job.cost}/{current_job.budget}")
                 result = agent.perform_task(task_prompt) if guild_name != "Artist" else agent.create_image(task_prompt)
                 if not result:
                     current_job.status = "FAILED"
@@ -138,26 +146,26 @@ class Monarch:
                 army_data = json.loads(content)
                 for agent_id, data in army_data.items():
                     specialty = data['specialty']
-                    guild_config = None
-                    for config in self.guilds.values():
-                        if specialty in config['prompts']:
-                            guild_config = config
-                            break
+                    agent_guild_config = None
 
-                    if guild_config:
-                        # --- NEW RANK CALCULATION LOGIC ---
-                        # 1. Create the agent at a temporary F-Rank
-                        agent = ShadowAgent(data['agent_id'], "F", specialty, guild_config)
-                        # 2. Assign its saved XP
+                    # --- CORRECTED LOGIC ---
+                    # Find which guild this agent belongs to by checking the specialty against each guild's prompts
+                    for guild_name, config in self.guilds.items():
+                        if guild_name != "rank_costs" and specialty in config.get('prompts', {}):
+                            agent_guild_config = config
+                            break
+                    # --- END OF CORRECTION ---
+
+                    if agent_guild_config:
+                        agent = ShadowAgent(data['agent_id'], "F", specialty, agent_guild_config)
                         agent.xp = data['xp']
-                        # 3. Recalculate its true rank by checking all thresholds
+                        # Recalculate true rank
                         for rank in RANKS:
                             if agent.xp >= RANK_XP_THRESHOLDS.get(rank, float('inf')):
                                 agent.rank = rank
                             else:
-                                break  # Stop when it no longer meets the threshold
-                        # 4. Finalize the agent in the army
-                        agent.update_config()  # Ensure config matches the final rank
+                                break
+                        agent.update_config()
                         self.army[agent_id] = agent
 
         except FileNotFoundError:

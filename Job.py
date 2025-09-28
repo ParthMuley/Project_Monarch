@@ -7,8 +7,8 @@ class Job:
         self.status = "PENDING"
         self.history = []  # To log each step
         self.artifacts = {}  # To store outputs like 'outline', 'draft'
-        self.budget = budget
-        self.cost=0
+        self.budget = budget # Add budget attribute
+        self.cost=0 # Track spending
         print(f"New Job created (ID: {self.id}) for request: '{self.user_request}'")
 
     def add_history(self, agent_id, action, result):
