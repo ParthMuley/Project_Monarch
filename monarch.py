@@ -1,252 +1,178 @@
 # monarch.py
 import json
-import re
-from logging import exception
-from Job import Job
-
-from agent import ShadowAgent
+from agent import ShadowAgent, RANKS, RANK_XP_THRESHOLDS
+from job import Job
+from memory import memorize
 
 
 class Monarch:
-    def __init__(self, army_file="army.json"):
+    def __init__(self, army_file="army.json", guild_config_file="guilds.json"):
         self.army = {}
         self.army_file = army_file
-        self.load_army()
-        print(f"Monarch System Initialized. Managing {len(self.army)} army.")
+        self.specialty_counters={}
+        self._load_guild_configs(guild_config_file)
+        self._load_army()
+        print(f"Monarch System Initialized. Managing {len(self.army)} agents across {len(self.guilds)} guilds.")
 
-    def save_army(self):
-        """
-        Saves the current state of the army to the JSON file.
-        """
-        print(f"Monarch : Saving the state of {len(self.army)} agents to {self.army_file}.")
-        army_data={agent_id:agent.to_dict() for agent_id, agent in self.army.items()}
-        with open(self.army_file, "w") as f:
-            json.dump(army_data, f, indent=4)
-        print("Save Complete.")
+    def _load_guild_configs(self, guild_config_file):
+        """Loads the guild definitions from the config file."""
+        with open(guild_config_file, 'r') as f:
+            self.guilds = json.load(f)
 
-    def load_army(self):
-        """
-        Loads the army srate from the JSON file if it exists.
-        """
-        try:
-            with open(self.army_file, "r") as f:
-                army_data = json.load(f)
-                for agent_id, agent_info in army_data.items():
-                    agent = ShadowAgent(
-                        agent_id=agent_info["agent_id"],
-                        rank=agent_info['rank'],
-                        specialty=agent_info['specialty']
-                    )
-                    agent.xp = agent_info['xp']
-                    self.army[agent_id] = agent
-            print(f"Successfully Loaded {len(self.army)} agents from {self.army_file}.")
-        except FileNotFoundError:
-            print("No existing army file found. Starting with a new army.")
-        except Exception as e:
-            print(f"Could not load army file. Starting fresh. Error: {e}")
+    def _determine_guild(self, user_request):
+        """Dynamically determines the guild by checking for specific keywords first."""
+        prompt = user_request.lower()
 
-    def determine_guild(self, user_prompt):
-        """
-        Determine the required GUILD  and starting specialty for a task.
-        Acts as the high-level dispatcher.
-        """
-        prompt = user_prompt.lower()
-        if any(keyword in prompt for keyword in ["code", "script", "methods", "program", "app"]):
-            return "Coder"  # Starting role for the Coder Guild
-        return "Writer"
+        # Prioritize Coder and Artist guilds as their keywords are more specific.
+        if any(keyword in prompt for keyword in self.guilds["Coder"]["keywords"]):
+            return "Coder", self.guilds["Coder"]
+        if any(keyword in prompt for keyword in self.guilds["Artist"]["keywords"]):
+            return "Artist", self.guilds["Artist"]
+        # Default to Writer if no other specific keywords are found.
+        return "Writer", self.guilds["Writer"]
 
-    def get_agent(self, specialty, min_rank="F"):
-        """Finds an available agent or creates one if none exist."""
-        # This is a more advanced find logic, looking for best available rank
-        best_agent = None
+    def _get_agent(self, specialty, guild_config, min_rank="F"):
+        """Finds the most cost-effective agent that meets the minimum rank."""
+
+        qualified_agents = []
         for agent in self.army.values():
-            if agent.specialty == specialty and agent.rank >= min_rank:
-                if best_agent is None or agent.rank > best_agent.rank:
-                    best_agent = agent
+            if agent.specialty == specialty and RANKS.index(agent.rank) >= RANKS.index(min_rank):
+                qualified_agents.append(agent)
 
-        if best_agent:
-            print(f"Monarch: Found available agent {best_agent.agent_id} for the job.")
-            return best_agent
-        else:
-            # If no suitable agent is found, create a new one
-            agent_id = f"{specialty[0]}-{len(self.army) + 1:03d}"
-            print(f"Monarch: No '{specialty}' of rank {min_rank}+. Summoning new agent {agent_id}.")
-            new_agent = ShadowAgent(agent_id=agent_id, rank=min_rank, specialty=specialty)
+        if qualified_agents:
+            # Sort agents by rank (cheapest first) and pick the first one
+            qualified_agents.sort(key=lambda x: RANKS.index(x.rank))
+            cheapest_agent = qualified_agents[0]
+            print(
+                f"Monarch: Found {len(qualified_agents)} qualified agents. Choosing the most cost-effective: {cheapest_agent.agent_id} ({cheapest_agent.rank} Rank).")
+            return cheapest_agent
+
+        # --- Creation logic remains the same ---
+        start_role = guild_config.get("start_role")
+        if specialty == start_role:
+            print(f"Monarch: No available '{specialty}'. Recruiting a new F-Rank agent.")
+            current_count = self.specialty_counters.get(specialty, 0) + 1
+            self.specialty_counters[specialty] = current_count
+            agent_id = f"{specialty[0]}-{current_count:03d}"
+            new_agent = ShadowAgent(agent_id, "F", specialty, guild_config)
             self.army[agent_id] = new_agent
             return new_agent
-
-    # --- THIS IS THE NEW TOP-LEVEL METHOD ---
-    def execute_complex_job(self, user_request):
-        """Decomposes a request and executes the generated plan."""
-        print("Monarch: Accessing Planner to decompose the user's request...")
-
-        # Step 1: Decompose the request into a plan using a Planner agent
-        project_plan = self._decompose_request_into_plan(user_request)
-        if not project_plan:
-            print("Monarch: Failed to create a project plan. Aborting.")
-            return None, None
-
-        # Step 2: Execute the plan
-        return self._execute_plan(user_request, project_plan)
-
-    def _decompose_request_into_plan(self, user_request):
-        """Uses a specialized S-Rank Planner agent to create a project plan."""
-        try:
-            planner_agent = self.get_agent("Planner", "S")
-            raw_output = planner_agent.perform_task(user_request)
-
-            # --- NEW: Robust JSON Extraction Logic ---
-            print(f"DEBUG: Planner's raw output:\n---\n{raw_output}\n---")
-
-            # Use regex to find a JSON list '[...]' or object '{...}'
-            json_match = re.search(r'\[.*\]|\{.*\}', raw_output, re.DOTALL)
-
-            if json_match:
-                plan_str = json_match.group(0)
-                print(f"DEBUG: Extracted JSON string:\n---\n{plan_str}\n---")
-                project_plan = json.loads(plan_str)
-                return project_plan
-            else:
-                print("Error: No valid JSON block found in the Planner's output.")
-                return None
-            # --- END OF NEW LOGIC ---
-
-        except json.JSONDecodeError as e:
-            print(f"Error decoding JSON from planner: {e}")
-            return None
-        except Exception as e:
-            print(f"An error occurred during the planning phase: {e}")
+        else:
             return None
 
-    def _execute_plan(self, user_request, project_plan):
-        """Executes a list of sub-tasks, replacing the old execute_job method."""
+
+    def _is_agent_available(self, specialty, min_rank):
+        """Checks if a qualified agent exists without creating one."""
+        for agent in self.army.values():
+            if agent.specialty == specialty and RANKS.index(agent.rank) >= RANKS.index(min_rank):
+                return True
+        return False
+
+    def execute_job(self, user_request):
+        """
+        Intelligently handles a request by checking for army capabilities first.
+        """
+        guild_name, guild_config = self._determine_guild(user_request)
         current_job = Job(user_request)
-        current_job.status = "IN_PROGRESS"
-        print(f"Monarch: Plan created with {len(project_plan)} steps. Starting execution.")
+        print(f"Monarch: Task assigned to the {guild_name}'s Guild.")
 
-        for task_info in project_plan:
-            # ... (The rest of this logic is the same as the old execute_job method)
-            guild = task_info["guild"]
-            task_prompt = task_info["prompt"]
+        # --- CAPABILITY ASSESSMENT ---
+        workflow = guild_config["workflow"]
+        can_execute_full_workflow = True
+        for step in workflow:
+            if not self._is_agent_available(step["role"], step["min_rank"]):
+                can_execute_full_workflow = False
+                break
 
-            for key, value in current_job.artifacts.items():
-                placeholder = f"{{{key.upper()}}}"
-                task_prompt = task_prompt.replace(placeholder, value)
+        # --- EXECUTION BASED ON ASSESSMENT ---
+        if can_execute_full_workflow:
+            print("Monarch: Qualified specialists found. Executing full multi-step workflow.")
+            for step in workflow:
+                role, min_rank, task_prompt, artifact_name = step["role"], step["min_rank"], step["task"], step[
+                    "artifact_name"]
+                for key, value in current_job.artifacts.items():
+                    task_prompt = task_prompt.replace(f"{{{key}}}", value)
+                task_prompt = task_prompt.replace("{request}", user_request)
+                agent = self._get_agent(role, guild_config, min_rank)  # Corrected to self._get_agent
+                # --- NEW: Budget Check ---
+                agent_cost = self.guilds["rank_costs"].get(agent.rank, 20)
+                if current_job.cost + agent_cost > current_job.budget:
+                    print(f"Job failed: Assigning agent {agent.agent_id} (cost: {agent_cost}) would exceed budget.")
+                    current_job.status = "FAILED"
+                    return None, current_job.history
+                current_job.cost += agent_cost
+                print(f"Monarch: Assigning agent {agent.agent_id}. Cost: {agent_cost}. Total cost: {current_job.cost}/{current_job.budget}")
+                result = agent.perform_task(task_prompt) if guild_name != "Artist" else agent.create_image(task_prompt)
+                if not result:
+                    current_job.status = "FAILED"
+                    return None, current_job.history
+                current_job.artifacts[artifact_name] = result
+                current_job.add_history(agent.agent_id, f"Completed step: {role}", result)
+                agent.gain_xp(20)
 
-            print(f"\nExecuting sub-task for {guild}'s Guild: '{task_prompt[:50]}...'")
+            final_artifact_name = workflow[-1]["artifact_name"]
+            final_product = current_job.artifacts.get(final_artifact_name)
 
-            if guild == "Coder":
-                result = self.execute_single_coder_task(task_prompt)
-                # Save artifact with a generic name based on guild
-                current_job.artifacts['code'] = result
-            elif guild == "Writer":
-                result = self.execute_single_writer_task(task_prompt)
-                current_job.artifacts['report'] = result
+            # --- ADD MEMORIZE CALL HERE (for full workflow) ---
+            if final_product:
+                memorize(job_id=current_job.id, content=final_product)
 
-            if not result:
-                # ... (error handling) ...
-                return None, current_job.history
+            return final_product, current_job.history
+        else:
+            # --- FALLBACK: "Best Effort" Mode ---
+            print("Monarch: High-rank specialists not available. Falling back to 'Best Effort' mode.")
+            start_role = guild_config["start_role"]
+            agent = self._get_agent(start_role, guild_config, "F")  # Corrected to self._get_agent
 
-            current_job.add_history("Monarch", f"Completed {guild} sub-task", result)
+            result = agent.perform_task(user_request) if guild_name != "Artist" else agent.create_image(user_request)
+            if result:
+                agent.gain_xp(25)
+                current_job.add_history(agent.agent_id, "Completed job via Best Effort", result)
 
-        current_job.status = "COMPLETED"
-        return current_job.artifacts, current_job.history
+                # --- ADD MEMORIZE CALL HERE (for Best Effort mode) ---
+                memorize(job_id=current_job.id, content=result)
 
-    def execute_single_coder_task(self, prompt):
-        """Gets the best coder and performs a single task."""
-        # For simplicity, we get a C-rank engineer for any coding task now
-        agent = self.get_agent("Software Engineer", "C")
-        result = agent.perform_task(prompt)
-        if result: agent.gain_xp(20)
-        return result
+                return result, current_job.history
+            else:
+                return None, [f"Best-effort attempt by {agent.agent_id} failed."]
 
-    def execute_single_writer_task(self, prompt):
-        """Gets the best writer and performs a single task."""
-        # We'll use a C-rank writer for any writing task
-        agent = self.get_agent("Writer", "C")
-        result = agent.perform_task(prompt)
-        if result: agent.gain_xp(20)
-        return result
+    def _load_army(self):
+        """Loads the army state and correctly recalculates rank from XP."""
+        try:
+            with open(self.army_file, 'r') as f:
+                content = f.read()
+                if not content: return
 
+                army_data = json.loads(content)
+                for agent_id, data in army_data.items():
+                    specialty = data['specialty']
+                    agent_guild_config = None
 
+                    # --- CORRECTED LOGIC ---
+                    # Find which guild this agent belongs to by checking the specialty against each guild's prompts
+                    for guild_name, config in self.guilds.items():
+                        if guild_name != "rank_costs" and specialty in config.get('prompts', {}):
+                            agent_guild_config = config
+                            break
+                    # --- END OF CORRECTION ---
 
-        # --- NEW ORCHESTRATION METHOD ---
+                    if agent_guild_config:
+                        agent = ShadowAgent(data['agent_id'], "F", specialty, agent_guild_config)
+                        agent.xp = data['xp']
+                        # Recalculate true rank
+                        for rank in RANKS:
+                            if agent.xp >= RANK_XP_THRESHOLDS.get(rank, float('inf')):
+                                agent.rank = rank
+                            else:
+                                break
+                        agent.update_config()
+                        self.army[agent_id] = agent
 
-    # def execute_writer_job(self, current_job):
-    #     """Manages a multi-step job using a hierarchy of agents."""
-    #     try:
-    #         # Step 1: Outlining by a Researcher (Rank F+)
-    #         outliner = self.get_agent("Researcher", "F")
-    #         outline_prompt = f"Create a concise, bulleted outline for a report on the following topic: {current_job.user_request}"
-    #         outline = outliner.perform_task(outline_prompt)
-    #         if not outline: raise Exception("Outlining failed.")
-    #         current_job.artifacts['outline'] = outline
-    #         current_job.add_history(outliner.agent_id, "Generated Outline", outline)
-    #         outliner.gain_xp(10)
-    #
-    #         # Step 2: Drafting by a Writer (Rank C+)
-    #         writer = self.get_agent("Writer", "C")
-    #         draft_prompt = f"Using the following outline, write a detailed draft of the report. \n\nOUTLINE:\n{outline}"
-    #         draft = writer.perform_task(draft_prompt)
-    #         if not draft: raise Exception("Drafting failed.")
-    #         current_job.artifacts['draft'] = draft
-    #         current_job.add_history(writer.agent_id, "Wrote Draft", draft)
-    #         writer.gain_xp(25)  # More complex tasks grant more XP
-    #
-    #         # Step 3: Editing by an Editor (Rank A+)
-    #         editor = self.get_agent("Editor", "A")
-    #         edit_prompt = f"Review the following draft for clarity, accuracy, and style. Polish it into a final report. \n\nDRAFT:\n{draft}"
-    #         final_report = editor.perform_task(edit_prompt)
-    #         if not final_report: raise Exception("Editing failed.")
-    #         current_job.artifacts['final_report'] = final_report
-    #         current_job.add_history(editor.agent_id, "Finalized Report", final_report)
-    #         editor.gain_xp(50)
-    #
-    #         current_job.status = "COMPLETED"
-    #         print(f"\nJob {current_job.id} completed successfully!")
-    #         return final_report, current_job.history
-    #
-    #     except Exception as e:
-    #         current_job.status = "FAILED"
-    #         print(f"Job {current_job.id} failed. Error: {e}")
-    #         return None, current_job.history
-    #
-    # def execute_coder_job(self, current_job):
-    #     """Handles the multi-step process for the Coder's Guild."""
-    #     try:
-    #         # Step 1: Planning by a Junior Dev (Rank F+)
-    #         planner = self.get_agent("Junior Dev", "F")
-    #         plan_prompt = f"Create a simple, step-by-step plan in plain English to create a Python script for the following request. Do not write any code. Request: {current_job.user_request}"
-    #         plan = planner.perform_task(plan_prompt)
-    #         if not plan: raise Exception("Planning failed.")
-    #         current_job.artifacts['plan'] = plan
-    #         current_job.add_history(planner.agent_id, "Created Plan", plan)
-    #         planner.gain_xp(10)
-    #
-    #         # Step 2: Implementation by a Software Engineer (Rank C+)
-    #         coder = self.get_agent("Software Engineer", "C")
-    #         code_prompt = f"Based on the following plan, write the complete Python code. Only write the code, nothing else. \n\nPLAN:\n{plan}"
-    #         code = coder.perform_task(code_prompt)
-    #         if not code: raise Exception("Implementation failed.")
-    #         current_job.artifacts['code'] = code
-    #         current_job.add_history(coder.agent_id, "Wrote Code", code)
-    #         coder.gain_xp(25)
-    #
-    #         # Step 3: Testing by a System Architect (Rank A+)
-    #         tester = self.get_agent("System Architect", "A")
-    #         test_prompt = f"Review the following Python code. First, explain any potential bugs or improvements. Second, write a simple test case to verify its functionality. \n\nCODE:\n{code}"
-    #         review = tester.perform_task(test_prompt)
-    #         if not review: raise Exception("Testing failed.")
-    #         current_job.artifacts['review'] = review
-    #         current_job.add_history(tester.agent_id, "Reviewed and Tested Code", review)
-    #         tester.gain_xp(50)
-    #
-    #         current_job.status = "COMPLETED"
-    #         final_product = f"--- PLAN ---\n{plan}\n\n--- CODE ---\n{code}\n\n--- REVIEW & TESTS ---\n{review}"
-    #         print(f"\nCoder Guild Job {current_job.id} completed successfully!")
-    #         return final_product, current_job.history
-    #
-    #     except Exception as e:
-    #         current_job.status = "FAILED"
-    #         print(f"Coder Guild Job {current_job.id} failed. Error: {e}")
-    #         return None, current_job.history
+        except FileNotFoundError:
+            print("No existing army file found. Starting with a new army.")
+
+    def save_army(self):
+        with open(self.army_file, 'w') as f:
+            army_data = {id: agent.to_dict() for id, agent in self.army.items()}
+            json.dump(army_data, f, indent=4)
+        print("Army state saved.")

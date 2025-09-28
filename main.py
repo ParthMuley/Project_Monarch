@@ -1,29 +1,44 @@
 # main.py
-from dotenv import load_dotenv
+import argparse
 from monarch import Monarch
 
-load_dotenv(override=True)
+def main():
+    """
+    Main function to run the Monarch CLI.
+    """
+    # 1. Set up the argument parser
+    parser = argparse.ArgumentParser(
+        prog="Project Monarch",
+        description="An autonomous, multi-guild agent organization.",
+        epilog="Provide a detailed task prompt for the agent army to execute."
+    )
 
-monarch_controller = Monarch()
-print("\n" + "="*50)
+    # 2. Define the command-line arguments
+    parser.add_argument(
+        "prompt",  # The name of the argument
+        type=str,
+        help="The main task or prompt you want the agent army to work on."
+    )
 
-# --- Define a single, complex, multi-guild prompt ---
-master_prompt = "Generate a technical report on the performance of a Python function that calculates Fibonacci numbers, and you must include the function's complete code in the report."
+    # 3. Parse the arguments from the command line
+    args = parser.parse_args()
 
-print(f"\n[USER'S AUTONOMOUS JOB]: {master_prompt}")
+    # 4. Initialize and run the Monarch system
+    monarch_controller = Monarch()
+    print("\n" + "="*50)
+    print(f"\n[USER JOB]: {args.prompt}")
 
-# --- Give the Monarch the high-level task ---
-# It will now create the plan AND execute it.
-final_artifacts, job_history = monarch_controller.execute_complex_job(master_prompt)
+    final_product, _ = monarch_controller.execute_job(args.prompt)
 
-print("\n--------------------------")
-if final_artifacts:
-    print("\n--- MONARCH'S FINAL DELIVERABLE (AUTONOMOUSLY GENERATED) ---")
-    final_report = f"## Technical Report\n\n{final_artifacts.get('report', '')}\n\n## Appendix: Source Code\n\n```python\n{final_artifacts.get('code', '')}\n```"
-    print(final_report)
-else:
-    print("The collaborative job could not be completed.")
+    print("\n--------------------------")
+    if final_product:
+        print("\n--- MONARCH'S FINAL DELIVERABLE ---")
+        print(final_product)
+    else:
+        print("The job could not be completed.")
 
-print("\n" + "="*50)
+    print("\n" + "="*50)
+    monarch_controller.save_army()
 
-monarch_controller.save_army()
+if __name__ == "__main__":
+    main()
