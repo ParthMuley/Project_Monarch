@@ -1,4 +1,4 @@
-# Project Monarch  monarch
+# Project Monarch  
 
 An autonomous, multi-guild AI agent organization inspired by the anime *Solo Leveling*.
 
