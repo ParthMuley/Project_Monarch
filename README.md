@@ -17,7 +17,7 @@ This project creates a system where a central "Monarch" agent manages an army of
 
 1.  **Clone the Repository:**
     ```bash
-    git clone <your-repo-url>
+    git clone <repo-url>
     cd project-monarch
     ```
 
