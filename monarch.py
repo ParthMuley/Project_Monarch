@@ -1,7 +1,7 @@
 # monarch.py
 import json
 from agent import ShadowAgent, RANKS, RANK_XP_THRESHOLDS
-from Job import Job
+from job import Job
 from memory import memorize
 
 
