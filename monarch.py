@@ -204,9 +204,10 @@ class Monarch:
                     agent_guild_config = None
 
                     # --- CORRECTED LOGIC ---
-                    # Find which guild this agent belongs to by checking the specialty against each guild's prompts
+                    # Find which guild this agent belongs to by checking the specialty
                     for guild_name, config in self.guilds.items():
-                        if guild_name != "rank_costs" and specialty in config.get('prompts', {}):
+                        # Add a check to ensure the config is a dictionary (a guild)
+                        if isinstance(config, dict) and specialty in config.get('prompts', {}):
                             agent_guild_config = config
                             break
                     # --- END OF CORRECTION ---
