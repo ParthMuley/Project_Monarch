@@ -1,6 +1,10 @@
 {
-  "treasury": 1000,
-  "job_reward": 150,
+  "treasury": 1145,
+  "job_tiers": {
+    "Easy": {"reward": 50, "penalty": 25},
+    "Medium": {"reward": 150, "penalty": 75},
+    "Hard": {"reward": 400, "penalty": 200}
+  },
   "rank_costs": {
     "F": 5,
     "E": 8,
@@ -15,7 +19,14 @@
     "code_interpreter": 25
   },
   "Writer": {
-    "keywords": ["report", "write", "summary", "blog", "describe", "story"],
+    "keywords": [
+      "report",
+      "write",
+      "summary",
+      "blog",
+      "describe",
+      "story"
+    ],
     "start_role": "Researcher",
     "prompts": {
       "Researcher": "You are a novice research assistant. Your job is to generate clear, concise outlines based on the user's request.",
@@ -24,18 +35,53 @@
       "Integrator": "You are a master report assembler. Assemble a final report from the provided artifacts."
     },
     "career_path": [
-      {"from": "Researcher", "to": "Writer", "at_rank": "C"},
-      {"from": "Writer", "to": "Editor", "at_rank": "A"}
+      {
+        "from": "Researcher",
+        "to": "Writer",
+        "at_rank": "C"
+      },
+      {
+        "from": "Writer",
+        "to": "Editor",
+        "at_rank": "A"
+      }
     ],
     "workflow": [
-      {"role": "Researcher", "min_rank": "F", "task": "Create a concise, bulleted outline for a report on the topic: {request}", "artifact_name": "outline"},
-      {"role": "Writer", "min_rank": "C", "task": "Using the following outline, write a detailed draft of the report. \n\nOUTLINE:\n{outline}", "artifact_name": "draft"},
-      {"role": "Editor", "min_rank": "A", "task": "Review the following draft and polish it into a final report. \n\nDRAFT:\n{draft}", "artifact_name": "report"},
-      {"role": "Integrator", "min_rank": "S", "task": "Assemble the final report using the following materials. \n\nREPORT:\n{report}", "artifact_name": "final_report"}
+      {
+        "role": "Researcher",
+        "min_rank": "F",
+        "task": "Create a concise, bulleted outline for a report on the topic: {request}",
+        "artifact_name": "outline"
+      },
+      {
+        "role": "Writer",
+        "min_rank": "C",
+        "task": "Using the following outline, write a detailed draft of the report. \n\nOUTLINE:\n{outline}",
+        "artifact_name": "draft"
+      },
+      {
+        "role": "Editor",
+        "min_rank": "A",
+        "task": "Review the following draft and polish it into a final report. \n\nDRAFT:\n{draft}",
+        "artifact_name": "report"
+      },
+      {
+        "role": "Integrator",
+        "min_rank": "S",
+        "task": "Assemble the final report using the following materials. \n\nREPORT:\n{report}",
+        "artifact_name": "final_report"
+      }
     ]
   },
   "Coder": {
-    "keywords": ["code", "script", "function", "program", "app", "class"],
+    "keywords": [
+      "code",
+      "script",
+      "function",
+      "program",
+      "app",
+      "class"
+    ],
     "start_role": "Junior Dev",
     "prompts": {
       "Junior Dev": "You are a Junior Developer. Your job is to create simple plans and write clean, functional code based on user requests.",
@@ -45,12 +91,29 @@
       "Integrator": "You are a master report assembler. Assemble a final technical report with three sections: '1. The Plan', '2. The Code', and '3. The Review'."
     },
     "career_path": [
-      {"from": "Junior Dev", "to": "Software Engineer", "at_rank": "C"},
-      {"from": "Software Engineer", "to": "System Architect", "at_rank": "A"}
+      {
+        "from": "Junior Dev",
+        "to": "Software Engineer",
+        "at_rank": "C"
+      },
+      {
+        "from": "Software Engineer",
+        "to": "System Architect",
+        "at_rank": "A"
+      }
     ],
     "workflow": [
-      {"role": "Junior Dev", "min_rank": "F", "task": "Create a step-by-step plan in plain English to create a Python script for: {request}", "artifact_name": "plan"},
-      {"role": "Software Engineer", "min_rank": "C", "task": "Based on the following plan, write the complete Python code. \n\nPLAN:\n{plan}", "artifact_name": "code",
+      {
+        "role": "Junior Dev",
+        "min_rank": "F",
+        "task": "Create a step-by-step plan in plain English to create a Python script for: {request}",
+        "artifact_name": "plan"
+      },
+      {
+        "role": "Software Engineer",
+        "min_rank": "C",
+        "task": "Based on the following plan, write the complete Python code. \n\nPLAN:\n{plan}",
+        "artifact_name": "code",
         "validation": {
           "validator_role": "Validator",
           "validator_min_rank": "B",
@@ -58,25 +121,48 @@
         }
       },
       {
-        "role": "System Architect", "min_rank": "A",
+        "role": "System Architect",
+        "min_rank": "A",
         "task": "Review and test the following Python code using the 'code_interpreter' tool to verify its functionality. \n\nCODE:\n{code}",
         "artifact_name": "review"
       },
-      {"role": "Integrator", "min_rank": "S", "task": "Assemble a final technical report.\n\nPLAN:\n{plan}\n\nCODE:\n{code}\n\nREVIEW:\n{review}", "artifact_name": "final_report"}
+      {
+        "role": "Integrator",
+        "min_rank": "S",
+        "task": "Assemble a final technical report.\n\nPLAN:\n{plan}\n\nCODE:\n{code}\n\nREVIEW:\n{review}",
+        "artifact_name": "final_report"
+      }
     ]
   },
   "Artist": {
-    "keywords": ["draw", "image", "logo", "picture", "photo", "illustrate", "art"],
+    "keywords": [
+      "draw",
+      "image",
+      "logo",
+      "picture",
+      "photo",
+      "illustrate",
+      "art"
+    ],
     "start_role": "Illustrator",
     "prompts": {
       "Illustrator": "You are a creative illustrator. Generate a visually appealing image based on the user's prompt.",
       "Art Director": "You are an Art Director. Generate a polished, high-quality image that strictly adheres to the prompt's style and composition."
     },
     "career_path": [
-      {"from": "Illustrator", "to": "Art Director", "at_rank": "A"}
+      {
+        "from": "Illustrator",
+        "to": "Art Director",
+        "at_rank": "A"
+      }
     ],
     "workflow": [
-      {"role": "Illustrator", "min_rank": "A", "task": "{request}", "artifact_name": "image_url"}
+      {
+        "role": "Illustrator",
+        "min_rank": "A",
+        "task": "{request}",
+        "artifact_name": "image_url"
+      }
     ]
   }
 }

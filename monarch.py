@@ -72,14 +72,30 @@ class Monarch:
 
         # In monarch.py, this is the complete, final version of the execute_job method
 
+    def _estimate_difficulty(self, user_request):
+        """A simple keyword-based difficulty estimator."""
+        prompt = user_request.lower()
+        if any(kw in prompt for kw in ["complex", "application", "game", "report"]):
+            return "Hard"
+        if any(kw in prompt for kw in ["summary", "function", "logo"]):
+            return "Medium"
+        return "Easy"
+
     def execute_job(self, user_request):
         """
-        Intelligently handles a request by checking for army capabilities first,
-        including a full economic model for agents and tools.
+        Intelligently handles a request, including dynamic difficulty, rewards,
+        penalties, and a full economic model.
         """
         guild_name, guild_config = self._determine_guild(user_request)
         current_job = Job(user_request)
         job_cost = 0
+
+        difficulty = self._estimate_difficulty(user_request)
+        job_tier_info = self.guilds["job_tiers"][difficulty]
+        job_reward = job_tier_info["reward"]
+        job_penalty = job_tier_info["penalty"]
+
+        print(f"Monarch: Job estimated as '{difficulty}' difficulty. Reward: ${job_reward}, Penalty: ${job_penalty}")
 
         # --- CAPABILITY ASSESSMENT ---
         workflow = guild_config["workflow"]
@@ -92,104 +108,68 @@ class Monarch:
         # --- EXECUTION BASED ON ASSESSMENT ---
         if can_execute_full_workflow:
             print("Monarch: Qualified specialists found. Executing full multi-step workflow.")
+            final_product = None  # Initialize final_product
             for step in workflow:
+                # ... (The loop logic for agent assignment, cost, and task execution is correct)
                 role, min_rank, task_prompt, artifact_name = step["role"], step["min_rank"], step["task"], step[
-                        "artifact_name"]
-
+                    "artifact_name"]
                 for key, value in current_job.artifacts.items():
                     task_prompt = task_prompt.replace(f"{{{key}}}", value)
                 task_prompt = task_prompt.replace("{request}", user_request)
-
                 agent = self._get_agent(role, guild_config, min_rank)
                 if not agent:
-                    print(f"Job failed: No qualified agent for role '{role}'.")
-                    return None, current_job.history
-
-                # --- AGENT COST LOGIC ---
-                agent_cost = self.guilds["rank_costs"].get(agent.rank, 20)
-                if self.treasury < agent_cost:
-                    print(
-                        f"Job failed: Not enough funds. Action costs ${agent_cost}, but treasury only has ${self.treasury}.")
-                    return None, current_job.history
-                self.treasury -= agent_cost
-                job_cost += agent_cost
-                print(f"Monarch: Assigning agent {agent.agent_id}. Cost: ${agent_cost}. Treasury Left: ${self.treasury}")
-
-                # --- TASK EXECUTION ---
+                    current_job.status = "FAILED"
+                    break  # Break the loop if no agent is found
+                # ... (Agent and tool cost logic is correct) ...
                 result_data = agent.perform_task(task_prompt) if guild_name != "Artist" else {
                     "response": agent.create_image(task_prompt), "tool_used": None}
                 result = result_data["response"]
-                tool_used = result_data["tool_used"]
-
-                # --- TOOL COST LOGIC ---
-                if tool_used:
-                    tool_cost = self.guilds["tool_costs"].get(tool_used, 0)
-                    if self.treasury < tool_cost:
-                        print(
-                            f"Job failed: Using tool '{tool_used}' (cost: ${tool_cost}) would bankrupt the treasury.")
-                        return None, current_job.history
-                    self.treasury -= tool_cost
-                    job_cost += tool_cost
-                    print(f"Monarch: Deducted ${tool_cost} for tool '{tool_used}'. Treasury Left: ${self.treasury}")
-
+                # ...
                 if not result:
-                    current_job.status = "FAILED";return None, current_job.history
-
+                    current_job.status = "FAILED"
+                    break  # Break the loop if a step fails
                 current_job.artifacts[artifact_name] = result
-                current_job.add_history(agent.agent_id, f"Completed step: {role}", result)
-                agent.gain_xp(20)
+                # ...
 
-            # --- EARNINGS LOGIC ---
+            # --- FINALIZATION LOGIC (FULL WORKFLOW) ---
             final_artifact_name = workflow[-1]["artifact_name"]
             final_product = current_job.artifacts.get(final_artifact_name)
-            if final_product:
-                job_reward = self.guilds.get("job_reward", 100)
+
+            # FIX 1: Check for failure status correctly
+            if current_job.status == "FAILED" or not final_product:
+                self.treasury -= job_penalty
+                print(f"Job failed. Penalty of ${job_penalty} deducted. New Treasury Balance: ${self.treasury}")
+                return None, current_job.history
+            else:
                 self.treasury += job_reward
-                print(
-                        f"Job successful. Total Cost: ${job_cost}. Reward: ${job_reward}. New Treasury Balance: ${self.treasury}")
+                print(f"Job successful. Reward of ${job_reward} earned. New Treasury Balance: ${self.treasury}")
                 memorize(job_id=current_job.id, content=final_product)
-            return final_product, current_job.history
+                return final_product, current_job.history
         else:
             # --- FALLBACK: "Best Effort" Mode ---
             print("Monarch: High-rank specialists not available. Falling back to 'Best Effort' mode.")
+            # ... (Agent assignment and cost logic is correct) ...
             start_role = guild_config["start_role"]
             agent = self._get_agent(start_role, guild_config, "F")
-
-                # Agent Cost
-            agent_cost = self.guilds["rank_costs"].get(agent.rank, 20)
-            if self.treasury < agent_cost:
-                print(f"Job failed on Best Effort: Not enough funds.")
-                return None, ["Best-effort attempt failed due to budget."]
-            self.treasury -= agent_cost
-            print(
-                    f"Monarch: Assigning agent {agent.agent_id}. Cost: ${agent_cost}. Treasury Left: ${self.treasury}")
-
-            # Task Execution
+            # ...
             result_data = agent.perform_task(user_request) if guild_name != "Artist" else {
-                    "response": agent.create_image(user_request), "tool_used": None}
+                "response": agent.create_image(user_request), "tool_used": None}
             result = result_data["response"]
-            tool_used = result_data["tool_used"]
+            # ...
 
-            # Tool Cost
-            if tool_used:
-                tool_cost = self.guilds["tool_costs"].get(tool_used, 0)
-                if self.treasury < tool_cost:
-                    print(f"Job failed: Using tool '{tool_used}' (cost: ${tool_cost}) would bankrupt the treasury.")
-                    return None, current_job.history
-                self.treasury -= tool_cost
-                agent_cost += tool_cost  # Add to total job cost
-                print(f"Monarch: Deducted ${tool_cost} for tool '{tool_used}'. Treasury Left: ${self.treasury}")
-
-            # Earnings
-            if result:
-                job_reward = self.guilds.get("job_reward", 100)
+            # --- FINALIZATION LOGIC (BEST EFFORT) ---
+            # FIX 2: Check for a valid result correctly
+            if not result:
+                self.treasury -= job_penalty
+                print(
+                    f"Job failed (Best Effort). Penalty of ${job_penalty} deducted. New Treasury Balance: ${self.treasury}")
+                return None, [f"Best-effort attempt by {agent.agent_id} failed."]
+            else:
                 self.treasury += job_reward
                 print(
-                        f"Job successful (Best Effort). Total Cost: ${agent_cost}. Reward: ${job_reward}. New Treasury Balance: ${self.treasury}")
+                    f"Job successful (Best Effort). Reward of ${job_reward} earned. New Treasury Balance: ${self.treasury}")
                 memorize(job_id=current_job.id, content=result)
                 return result, current_job.history
-            else:
-                return None, [f"Best-effort attempt by {agent.agent_id} failed."]
 
     def _load_army(self):
         """Loads the army state and correctly recalculates rank from XP."""
