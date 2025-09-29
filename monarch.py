@@ -9,12 +9,18 @@ class Monarch:
     def __init__(self, army_file="army.json", guild_config_file="guilds.json"):
         self.army = {}
         self.army_file = army_file
-        self.guild_config_file = guild_config_file #store the file name
-        self.specialty_counters={}
+        self.guild_config_file = guild_config_file
+        self.specialty_counters = {}
         self._load_guild_configs(guild_config_file)
-        self.treasury=self.guilds.get("treasury",500)#load treasury
+        self.treasury = self.guilds.get("treasury", 500)
         self._load_army()
-        print(f"Monarch System Initialized. Managing {len(self.army)} agents across {len(self.guilds)} guilds.")
+
+        # --- CORRECTED GUILD COUNT ---
+        # Count only the items in the config that are actual guilds (dictionaries)
+        guild_count = len([key for key, value in self.guilds.items() if isinstance(value, dict)])
+
+        print(
+            f"Monarch System Initialized. Treasury: ${self.treasury}. Managing {len(self.army)} agents across {guild_count} guilds.")
 
     def _load_guild_configs(self, guild_config_file):
         """Loads the guild definitions from the config file."""

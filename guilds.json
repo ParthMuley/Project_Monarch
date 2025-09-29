@@ -1,9 +1,18 @@
 {
-  "treasury": 1145,
+  "treasury": 1195,
   "job_tiers": {
-    "Easy": {"reward": 50, "penalty": 25},
-    "Medium": {"reward": 150, "penalty": 75},
-    "Hard": {"reward": 400, "penalty": 200}
+    "Easy": {
+      "reward": 50,
+      "penalty": 25
+    },
+    "Medium": {
+      "reward": 150,
+      "penalty": 75
+    },
+    "Hard": {
+      "reward": 400,
+      "penalty": 200
+    }
   },
   "rank_costs": {
     "F": 5,
