@@ -83,6 +83,7 @@ class ShadowAgent:
 
                 if tool_name in AVAILABLE_TOOLS:
                     print(f"Agent {self.agent_id} decided to use the '{tool_name}' tool.")
+                    tool_used_name=tool_name
                     tool_function = AVAILABLE_TOOLS[tool_name]
                     tool_result = tool_function(tool_input)
 
@@ -104,7 +105,7 @@ class ShadowAgent:
             ]
         ).choices[0].message.content
 
-        return final_response
+        return {"response":final_response,"tool_used":tool_used_name}
 
 
     def create_image(self, prompt):
