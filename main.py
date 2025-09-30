@@ -39,7 +39,7 @@ def main():
 
     print("\n" + "="*50)
     monarch_controller.save_army()
-    monarch_controller.save_config()
+    monarch_controller.save_configs()
 
 if __name__ == "__main__":
     main()

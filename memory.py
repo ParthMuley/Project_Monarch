@@ -20,11 +20,11 @@ def memorize(job_id: str, content: str):
     except Exception as e:
         print(f"Error during memorize: {e}")
 
-def recall(query:str,n_results=1)->list:
+def recall(query_texts:str,n_results=1)->list:
     """Recalls similar past jobs from the vector database."""
     try:
         results=collection.query(
-            query_texts=[query],
+            query_texts=query_texts,
             n_results=n_results
         )
         return results['documents'][0] if results['documents'] else []

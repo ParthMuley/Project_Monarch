@@ -1,32 +1,4 @@
 {
-  "treasury": 1195,
-  "job_tiers": {
-    "Easy": {
-      "reward": 50,
-      "penalty": 25
-    },
-    "Medium": {
-      "reward": 150,
-      "penalty": 75
-    },
-    "Hard": {
-      "reward": 400,
-      "penalty": 200
-    }
-  },
-  "rank_costs": {
-    "F": 5,
-    "E": 8,
-    "D": 12,
-    "C": 20,
-    "B": 35,
-    "A": 50,
-    "S": 80
-  },
-  "tool_costs": {
-    "web_search": 15,
-    "code_interpreter": 25
-  },
   "Writer": {
     "keywords": [
       "report",

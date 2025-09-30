@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from tools import AVAILABLE_TOOLS
 from memory import recall
 import json
+import re
 
 load_dotenv(override=True)
 client = OpenAI()
@@ -20,93 +21,71 @@ class ShadowAgent:
         self.xp = 0
         self.guild_config = guild_config
         self.update_config()
-        print(f"Agent {self.agent_id} ({self.rank} Rank {self.specialty}) has been created.")
+        print(f"Agent {self.agent_id} ({self.specialty}) has been instantiated.")
 
     def update_config(self):
         """Sets the agent's prompt based on its guild configuration."""
         self.system_prompt = self.guild_config["prompts"].get(self.specialty, "You are a helpful assistant.")
 
     def perform_task(self, prompt):
-        """A more advanced method where the agent can decide to use tools based on its prompt."""
+        """The agent's reasoning loop, with robust JSON parsing for tool decisions."""
         print(f"\nAgent {self.agent_id} ({self.rank} Rank) is analyzing the task: '{prompt[:50]}...'")
 
-        # --- NEW: Recall Step ---
-        # The agent first tries to recall similar past work from memory.
-        recalled_memories = recall(query=prompt)
+        tool_used_name = None
+        recalled_memories = recall(query_texts=prompt)
         memory_context = ""
         if recalled_memories:
-            memory_context = "I found this in my memory from a similar past job, which might be a useful reference:\n---\n" + "\n\n".join(
+            memory_context = "I found this in my memory from a similar past job...\n---\n" + "\n\n".join(
                 recalled_memories) + "\n---"
             print(f"Agent {self.agent_id} recalled relevant memories.")
 
-        # --- The rest of the method proceeds as before ---
-        # It will use the memory_context when deciding on a tool or formulating an answer.
         tool_decision_prompt = f"""
-                {memory_context}
-
-                You have access to the following tools: {list(AVAILABLE_TOOLS.keys())}.
-                Based on the user's request, should you use a tool?
-                If yes, respond with the JSON format: {{"tool_name": "name", "tool_input": "input for the tool"}}
-                If no, respond with "NO_TOOL".
-
-                User Request: "{prompt}"
-                """
-
-        # 1. Decision Making: The agent uses a powerful model to decide if a tool is needed.
-        # This prompt asks the model to "think" and choose a tool.
-        tool_decision_prompt = f"""
+        {memory_context}
         You have access to the following tools: {list(AVAILABLE_TOOLS.keys())}.
         Based on the user's request, should you use a tool?
-        If yes, respond with the JSON format: {{"tool_name": "name", "tool_input": "input for the tool"}}
+        If yes, respond with ONLY the JSON format: {{"tool_name": "name", "tool_input": "input for the tool"}}
         If no, respond with "NO_TOOL".
-
         User Request: "{prompt}"
         """
 
         try:
-            # The agent "thinks" about which tool to use
             decision_response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "system", "content": "You are a reasoning engine that decides which tool to use."},
                           {"role": "user", "content": tool_decision_prompt}]
             ).choices[0].message.content
 
-            if "NO_TOOL" in decision_response:
-                # 2a. No Tool Used: Proceed with a standard text response.
+            # --- NEW: Robust JSON Extraction Logic ---
+            json_match = re.search(r'\{.*\}', decision_response, re.DOTALL)
+
+            if "NO_TOOL" in decision_response or not json_match:
                 print(f"Agent {self.agent_id} decided no tool is needed.")
                 final_prompt = prompt
             else:
-                # 2b. Tool Used: Parse the decision and call the correct tool function.
-                tool_choice = json.loads(decision_response)
-                tool_name = tool_choice["tool_name"]
-                tool_input = tool_choice["tool_input"]
+                tool_choice_str = json_match.group(0)
+                tool_choice = json.loads(tool_choice_str)
+                tool_name = tool_choice.get("tool_name")
+                tool_input = tool_choice.get("tool_input")
 
                 if tool_name in AVAILABLE_TOOLS:
                     print(f"Agent {self.agent_id} decided to use the '{tool_name}' tool.")
-                    tool_used_name=tool_name
+                    tool_used_name = tool_name
                     tool_function = AVAILABLE_TOOLS[tool_name]
                     tool_result = tool_function(tool_input)
-
-                    # 3. Integration: The agent incorporates the tool's result.
                     final_prompt = f"The user's request was: '{prompt}'. I used the '{tool_name}' tool and got this result: '{tool_result}'. Now, provide a comprehensive final answer."
                 else:
-                    final_prompt = prompt  # Fallback if tool name is wrong
-
+                    final_prompt = prompt
         except Exception as e:
             print(f"An error occurred during tool decision: {e}. Proceeding without a tool.")
             final_prompt = prompt
 
-        # 4. Final Response Generation
-        final_response = client.chat.completions.create(
-            model="gpt-4o",  # Use a powerful model for the final answer
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": final_prompt}
-            ]
+        # Final response generation
+        final_response_text = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": self.system_prompt}, {"role": "user", "content": final_prompt}]
         ).choices[0].message.content
 
-        return {"response":final_response,"tool_used":tool_used_name}
-
+        return {"response": final_response_text, "tool_used": tool_used_name}
 
     def create_image(self, prompt):
         print(f"\nAgent {self.agent_id} ({self.rank} Rank {self.specialty}) is creating an image...")
