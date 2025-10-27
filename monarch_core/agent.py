@@ -4,6 +4,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from .tools import AVAILABLE_TOOLS
 from .memory import recall
+from .comms import send_message as comms_send_message, check_messages as comms_check_messages
 import json
 import re
 
@@ -22,6 +23,18 @@ class ShadowAgent:
         self.guild_config = guild_config
         self.update_config()
         print(f"Agent {self.agent_id} ({self.specialty}) has been instantiated.")
+
+    def send_message(self, recipient_id: str, message_content: str):
+        """
+        Sends a message to another agent via the message bus.
+        """
+        comms_send_message(recipient_id=recipient_id, sender_id=self.agent_id, message_content=message_content)
+
+    def check_messages(self) -> list:
+        """
+        Check for and retrieves messages from message bus.
+        """
+        return comms_check_messages(agent_id=self.agent_id)
 
     def update_config(self):
         """Sets the agent's prompt based on its guild configuration."""
