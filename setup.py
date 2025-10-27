@@ -1,10 +1,10 @@
 # setup.py
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='project-monarch',
     version='1.0.0',
-    py_modules=['main', 'agent', 'monarch', 'job', 'tools', 'memory'],
+    packages=find_packages(), # Should find monarch_core
     install_requires=[
         'openai',
         'python-dotenv',
@@ -14,7 +14,8 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'monarch = main:main',
+            # Points to the main function inside monarch_core/cli.py
+            'monarch = monarch_core.cli:main',
         ],
     },
 )

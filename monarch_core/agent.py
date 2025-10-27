@@ -2,8 +2,8 @@
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
-from tools import AVAILABLE_TOOLS
-from memory import recall
+from .tools import AVAILABLE_TOOLS
+from .memory import recall
 import json
 import re
 
@@ -119,7 +119,7 @@ class ShadowAgent:
                 previous_rank = self.rank
                 self.rank = next_rank
                 print(f"🎉 **RANK UP!** Agent {self.agent_id} has been promoted to {self.rank} Rank! 🎉")
-                self.check_for_class_advancement(previous_rank)
+                self.check_for_class_advancement()
                 self.update_config()
             else:
                 # If XP is not enough for the next rank, stop checking
