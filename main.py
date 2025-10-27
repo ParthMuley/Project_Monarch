@@ -1,6 +1,6 @@
 # main.py
 import argparse
-from monarch import Monarch
+from monarch_core.monarch import Monarch
 
 def main():
     """

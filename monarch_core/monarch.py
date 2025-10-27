@@ -1,6 +1,6 @@
 # monarch.py
 import json
-from agent import ShadowAgent, RANKS, RANK_XP_THRESHOLDS
+from monarch_core.agent import ShadowAgent, RANKS, RANK_XP_THRESHOLDS
 from job import Job
 from memory import memorize
 
